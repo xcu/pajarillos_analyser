@@ -1,22 +1,40 @@
+from datetime import datetime
+import calendar
 
 class Tweet(object):
 
   def __init__(self, deserialized_tweet):
-    self._tweet = DotDict(deserialized_tweet)
+    self.message = DotDict(deserialized_tweet)
 
   def get_text(self):
-    return self._tweet_text
+    return self.message.text
 
-  def get_user_mentions(self, property='screen_name'):
+  def get_user_mentions(self, prop='screen_name'):
     ''' 
     https://dev.twitter.com/docs/tweet-entities
     @param property str with the property to pick within the user mention:
     id, id_str, screen_name, name, indices
     '''
-    return self._tweet.entities.user_mentions.property
+    if not prop:
+      return self.message.entities.user_mentions
+    return ' '.join([getattr(mention, prop) for mention in self.message.entities.user_mentions])
 
   def get_hashtags(self):
-    return [ht.text for ht in self._tweet.entities.hashtags]
+    return ' '.join([ht.text for ht in self.message.entities.hashtags])
+
+  def get_creation_time(self):
+    'self.created_at will return something like Wed Aug 27 13:08:45 +0000 2008'
+    def get_month_number(month):
+      months = {v: k for k,v in enumerate(calendar.month_abbr)}
+      return months.get(month)
+    splitted_date = self.created_at.split()
+    splitted_time = dict(zip(['hour', 'minute', 'second'],
+                             [int(n) for n in splitted_date[3].split(':')]
+                            ))
+    splitted_date = (int(splitted_date[5]),
+                     get_month_number(splitted_date[1]),
+                     int(splitted_date[2]))
+    return datetime(*splitted_date, **splitted_time)
 
 class DotDict(dict):
     ''' thanks, stackoverflow: http://stackoverflow.com/questions/3031219/
@@ -32,8 +50,12 @@ class DotDict(dict):
             raise TypeError, 'expected dict'
 
     def __setitem__(self, key, value):
-        if isinstance(value, dict) and not isinstance(value, DotDict):
+        def valid_instance(val):
+          return isinstance(val, dict) and not isinstance(val, DotDict)
+        if valid_instance(value):
             value = DotDict(value)
+        elif isinstance(value, list) and all(valid_instance(item) for item in value):
+            value = [DotDict(item) for item in value]
         dict.__setitem__(self, key, value)
 
     def __getitem__(self, key):
