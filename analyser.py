@@ -1,9 +1,9 @@
 import json
 
 class GenericAnalyser(object):
-
   # https://dev.twitter.com/docs/streaming-apis/messages
-  message_type_handlers = {'delete': self.process_delete,
+  message_type_handlers = {'text': self.process_tweet,
+                           'delete': self.process_delete,
                            'scrub_geo': self.process_scrub_geo,
                            'limit': self.process_limit,
                            'status_withheld': self.process_status_withheld,
@@ -17,5 +17,4 @@ class GenericAnalyser(object):
     deserialized_dict = json.loads(serialized_dict)
     message_type = get_message_type(deserialized_dict)
     
-  def get_message_type(message_dict):
-    pass 
+
