@@ -1,20 +1,24 @@
 import json
+import simplejson
+from messages.message_factory import MessageFactory
 
 class GenericAnalyser(object):
-  # https://dev.twitter.com/docs/streaming-apis/messages
-  message_type_handlers = {'text': self.process_tweet,
-                           'delete': self.process_delete,
-                           'scrub_geo': self.process_scrub_geo,
-                           'limit': self.process_limit,
-                           'status_withheld': self.process_status_withheld,
-                           'user_withheld': self.process_user_withheld,
-                           'disconnect': self.process_disconnect,
-                           'warning': self.process_warning,
-                          }
   # duplicates!
+  def __init__(self):
+    self.mf = MessageFactory()
 
-  def analyse(self, serialized_dict):
-    deserialized_dict = json.loads(serialized_dict)
-    message_type = get_message_type(deserialized_dict)
-    
+  def analyse_file(self, file_name):
+    with open(file_name) as f:
+      for line in f:
+        self.analyse_message(line)
+
+  def analyse_message(self, serialized_message):
+    #deserialized_message = json.loads(serialized_message)
+    deserialized_message = simplejson.loads(serialized_message)
+    message = self.mf.create_message(deserialized_message)
+    message.process()
+
+if __name__ == '__main__':
+  a = GenericAnalyser()
+  a.analyse_file('results')
 
