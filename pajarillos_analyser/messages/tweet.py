@@ -15,10 +15,10 @@ class Tweet(Message):
     '''
     if not prop:
       return self.message.entities.user_mentions
-    return ' '.join([getattr(mention, prop) for mention in self.message.entities.user_mentions])
+    return [getattr(mention, prop) for mention in self.message.entities.user_mentions]
 
   def get_hashtags(self):
-    return ' '.join([ht.text for ht in self.message.entities.hashtags])
+    return [ht.text for ht in self.message.entities.hashtags]
 
   def get_creation_time(self, process=True):
     'self.created_at will return something like Wed Aug 27 13:08:45 +0000 2008'
@@ -30,6 +30,8 @@ class Tweet(Message):
     if not process:
       return self.message.created_at
     splitted_date = self.message.created_at.split()
+    if not splitted_date:
+      return None
     splitted_time = dict(zip(['hour', 'minute', 'second'],
                              [int(n) for n in splitted_date[3].split(':')]
                             ))
@@ -38,6 +40,15 @@ class Tweet(Message):
                      int(splitted_date[2]))
     return datetime(*splitted_date, **splitted_time)
 
+  def get_id(self):
+    return self.message.id_str
+
+  def get_retweet_count(self):
+    return self.message.retweet_count
+
+  def get_favorite_count(self):
+    return self.message.favorite_count
+
   def process(self):
     with open("tweets", "a") as f:
       f.write('{0}\t'.format(self.get_text().encode('utf-8')))
@@ -45,4 +56,6 @@ class Tweet(Message):
       f.write('{0}\t'.format(self.get_hashtags().encode('utf-8')))
       f.write('{0}\t'.format(self.get_creation_time(process=False).encode('utf-8')))
       f.write('\n')
+
+
 
