@@ -1,5 +1,4 @@
-import json
-import simplejson
+import ujson
 from messages.message_factory import MessageFactory
 
 class GenericAnalyser(object):
@@ -13,8 +12,7 @@ class GenericAnalyser(object):
         self.analyse_message(line)
 
   def analyse_message(self, serialized_message):
-    #deserialized_message = json.loads(serialized_message)
-    deserialized_message = simplejson.loads(serialized_message)
+    deserialized_message = ujson.loads(serialized_message)
     message = self.mf.create_message(deserialized_message)
     message.process()
 
