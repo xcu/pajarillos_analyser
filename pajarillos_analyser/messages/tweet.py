@@ -1,7 +1,10 @@
 from messages.message import Message
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from collections import defaultdict
 import calendar
+import re
+
 
 class Tweet(Message):
   def get_text(self):
@@ -49,7 +52,7 @@ class Tweet(Message):
   def get_favorite_count(self):
     return self.message.favorite_count
 
-  def process(self):
+  def _process(self):
     with open("tweets", "a") as f:
       f.write('{0}\t'.format(self.get_text().encode('utf-8')))
       f.write('{0}\t'.format(self.get_user_mentions().encode('utf-8')))
@@ -57,5 +60,25 @@ class Tweet(Message):
       f.write('{0}\t'.format(self.get_creation_time(process=False).encode('utf-8')))
       f.write('\n')
 
+  def _process_by_time(self, time_chunk_size):
+    ''' returns the time chunk the tweet belongs to
+    @params time_chunk_size, integer with the number of minutes delimiting a
+     chunk. 60 must be divisible by it'''
+    def reset_seconds(date):
+      return datetime(date.year, date.month, date.day, date.hour, date.minute)
+    if time_chunk_size > 60 or 60 % time_chunk_size:
+      raise Exception("time_chunk_size of size {0} is not valid".format(time_chunk_size))
+    creation_time = self.get_creation_time()
+    delta = timedelta(minutes=creation_time.minute % time_chunk_size)
+    return reset_seconds(creation_time - delta)
 
+  def get_terms_dict(self):
+    terms = defaultdict(int)
+    terms_to_filter = ['gt', 'lt']
+    # we need more than 1 separator
+    # http://stackoverflow.com/questions/1059559/python-strings-split-with-multiple-separators
+    for word in re.findall(r"[\w']+", self.get_text()):
+      if word not in terms_to_filter:
+        terms[word] += 1
+    return terms
 

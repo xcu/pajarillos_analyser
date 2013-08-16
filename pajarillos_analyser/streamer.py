@@ -50,12 +50,15 @@ def twitterreq(url, method, parameters):
   return response
 
 def fetchsamples():
-  url = "https://stream.twitter.com/1.1/statuses/sample.json"
-  parameters = {}
-  response = twitterreq(url, "GET", parameters)
+  #url = "https://stream.twitter.com/1.1/statuses/sample.json"
+  #parameters = {}
+  #response = twitterreq(url, "GET", parameters)
   #url = "https://stream.twitter.com/1.1/statuses/filter.json?track=mourinho,ronaldo"
   #parameters = {'track': 'mourinho,ronaldo'}
   #response = twitterreq(url, "POST", parameters)
+  url = "https://stream.twitter.com/1.1/statuses/filter.json?"
+  parameters = {'locations': '-9.472656,36.160774,4.809570,43.153753'}
+  response = twitterreq(url, "POST", parameters)
   for line in response:
     print line.strip()
 

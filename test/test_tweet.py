@@ -1,6 +1,7 @@
 import unittest
 from messages.tweet import Tweet
 import ujson as json
+from datetime import time
 import tweet_samples
 
 class TestTweet(unittest.TestCase):
@@ -72,4 +73,14 @@ class TestTweet(unittest.TestCase):
   def test_get_favorite_count(self):
     tweet = Tweet(json.loads(tweet_samples.hashtags_tweet))
     self.assertEquals(tweet.get_favorite_count(), 6)
+
+  def test_process_by_time(self):
+    tweet = Tweet(json.loads(tweet_samples.hashtags_tweet))
+    self.assertEquals(tweet._process_by_time(10).time(), time(8, 30))
+    tweet.message.created_at = u'Wed Aug 07 08:44:39 +0000 2013'
+    self.assertEquals(tweet._process_by_time(10).time(), time(8, 40))
+    self.assertRaises(Exception, tweet._process_by_time, 50)
+    self.assertRaises(Exception, tweet._process_by_time, 120)
+    tweet.message.created_at = u'Wed Aug 07 00:59:39 +0000 2013'
+    self.assertEquals(tweet._process_by_time(30).time(), time(0, 30))
 

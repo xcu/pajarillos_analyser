@@ -3,7 +3,7 @@ class Message(object):
   def __init__(self, value):
     self.message = DotDict(value)
 
-  def process(self):
+  def _process(self):
     pass
 
 
