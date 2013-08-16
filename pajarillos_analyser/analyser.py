@@ -29,16 +29,16 @@ class GenericAnalyser(object):
         time_chunk = message._process_by_time(10)
         tweets_date[time_chunk].add(message)
     with open("spanish_processed", 'w') as f:
-      for date in tweets_date:
+      for date in tweets_date.iterkeys():
         f.write("{0} SIZE: {1} MOST POPULAR: {2}".format(date, len(tweets_date[date]), self.get_terms_dict(tweets_date[date])))
         f.write('\n')
     return tweets_date
 
   def get_terms_dict(self, iterable):
     result = defaultdict(int)
-    for tweet in iterable:
+    for tweet in iter(iterable):
       tweet_dict = tweet.get_terms_dict()
-      for word in tweet_dict:
+      for word in tweet_dict.iterkeys():
         result[word] += tweet_dict[word]
     return sorted(result.items(), key=lambda x: x[1], reverse=True)[:5]
 
