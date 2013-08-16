@@ -35,11 +35,11 @@ class GenericAnalyser(object):
     return tweets_date
 
   def get_terms_dict(self, iterable):
-    result = {}
+    result = defaultdict(int)
     for tweet in iterable:
       tweet_dict = tweet.get_terms_dict()
-      # combine occurrences of the temporary result with current tweet
-      result = dict(chain(tweet_dict.iteritems(), result.iteritems()))
+      for word in tweet_dict:
+        result[word] += tweet_dict[word]
     return sorted(result.items(), key=lambda x: x[1], reverse=True)[:5]
 
 if __name__ == '__main__':
