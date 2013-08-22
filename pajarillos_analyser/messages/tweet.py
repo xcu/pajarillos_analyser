@@ -8,7 +8,8 @@ import re
 
 class Tweet(Message):
   def get_text(self):
-    return self.message.text
+    return self.message.get('text', '')
+    #return self.message.text
 
   def get_user_mentions(self, prop='screen_name'):
     ''' 
@@ -17,11 +18,13 @@ class Tweet(Message):
     id, id_str, screen_name, name, indices
     '''
     if not prop:
-      return self.message.entities.user_mentions
-    return [getattr(mention, prop) for mention in self.message.entities.user_mentions]
+      return self.message.get('entities', {}).get('user_mentions')
+      #return self.message.entities.user_mentions
+    return [mention.get(prop, '') for mention in self.message.get('entities', {}).get('user_mentions', '')]
+    #return [getattr(mention, prop) for mention in self.message.entities.user_mentions]
 
   def get_hashtags(self):
-    return [ht.text for ht in self.message.entities.hashtags]
+    return [ht.get('text', '') for ht in self.message.get('entities', {}).get('hashtags', '')]
 
   def get_creation_time(self, process=True):
     'self.created_at will return something like Wed Aug 27 13:08:45 +0000 2008'
@@ -31,8 +34,8 @@ class Tweet(Message):
       # months = {v: k for k,v in enumerate(calendar.month_abbr)}
       return months.get(month)
     if not process:
-      return self.message.created_at
-    splitted_date = self.message.created_at.split()
+      return self.message.get('created_at')
+    splitted_date = self.message.get('created_at', '').split()
     if not splitted_date:
       return None
     splitted_time = dict(zip(['hour', 'minute', 'second'],
@@ -44,13 +47,18 @@ class Tweet(Message):
     return datetime(*splitted_date, **splitted_time)
 
   def get_id(self):
-    return self.message.id_str
+    return self.message.get('id_str', '')
 
   def get_retweet_count(self):
-    return self.message.retweet_count
+    return self.message.get('retweet_count', '')
 
   def get_favorite_count(self):
-    return self.message.favorite_count
+    return self.message.get('favorite_count', '')
+
+  def get_user(self, field='screen_name'):
+    if not field:
+      return self.message.get('user', {})
+    return self.message.get('user', {}).get(field, '')
 
   def _process(self):
     with open("tweets", "a") as f:
