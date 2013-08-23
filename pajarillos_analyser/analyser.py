@@ -15,7 +15,7 @@ TIMECHUNK_SIZE = 1
 def convert_date(date):
   if date.utcoffset():
     date = date - date.utcoffset()
-  return int(cal.timegm(date.timetuple())) #* 1000 + date.microsecond / 1000)
+  return int(cal.timegm(date.timetuple()))
 
 
 class GenericAnalyser(object):
@@ -27,7 +27,6 @@ class GenericAnalyser(object):
     self.collection = self.client.test_database.time_chunks
     self.collection.drop()
     self.collection.create_index('start_date', unique=True)
-
 
   def process_file(self, file_name, process_types):
     for process_type in process_types:
@@ -69,19 +68,19 @@ class GenericAnalyser(object):
           self.save_chunk(current_time_chunk)
           current_time_chunk = self.get_time_chunk(message._process_by_time(TIMECHUNK_SIZE))
         current_time_chunk.update(message)
+    self.save_chunk(current_time_chunk)
+
+  def all_ids_from_db(self):
+    all_ids = set()
+    for chunk_dict in self.collection.find():
+      c = TimeChunk(chunk_dict.pop('size'), chunk_dict.pop('start_date'), **chunk_dict)
+      all_ids.update(c.tweet_ids)
+    return all_ids
 
   def save_chunk(self, chunk):
     key = convert_date(chunk.start_date)
-    #key = chunk.start_date
-    #if self.chunk_exists(key):
     logger.info("updating db with key {0}. Chunk with size {1}".format(key, len(chunk.tweet_ids)))
-    try:
-      self.collection.update({'start_date': key}, chunk.default(), upsert=True)
-    except:
-      import ipdb; ipdb.set_trace()
-    #else:
-    #  logger.info("inserting in db key {0}. Chunk with size {1}".format(key, len(chunk.tweet_ids)))
-    #  self.collection.insert(chunk.default())
+    self.collection.update({'start_date': key}, chunk.default(), upsert=True)
 
   def chunk_exists(self, start_time):
     return self._get_chunk(start_time).count()
@@ -114,7 +113,7 @@ class TimeChunk(object): #, json.JSONEncoder):
     if isinstance(start_date, datetime):
       self.start_date = start_date
     else:
-      self.start_date = datetime.utcfromtimestamp(start_date)# / 1000.0)
+      self.start_date = datetime.utcfromtimestamp(start_date))
     # when retrieved from kwargs we're not sure they are defaultdict
     self.terms_dict = defaultdict(int, kwargs.get('terms', defaultdict(int)))
     self.user_mentions = defaultdict(int, kwargs.get('user_mentions', defaultdict(int)))
@@ -143,11 +142,15 @@ class TimeChunk(object): #, json.JSONEncoder):
     return reset_seconds(creation_time - delta) == self.start_date
 
   def update(self, message):
+    previous_size = len(self.tweet_ids)
+    self.tweet_ids.add(message.get_id())
+    if len(self.tweet_ids) == previous_size:
+      logger.info('duplicated tweet: {0} not processing!'.format(message.get_id()))
+      return
     self._update_dict_generic(message.get_terms_dict(), self.terms_dict)
     self._update_list_generic(message.get_user_mentions(), self.user_mentions)
     self._update_list_generic(message.get_hashtags(), self.hashtags)
     self.users.add(message.get_user())
-    self.tweet_ids.add(message.get_id())
 
   def _update_list_generic(self, new_list, attr):
     for item in iter(new_list):
