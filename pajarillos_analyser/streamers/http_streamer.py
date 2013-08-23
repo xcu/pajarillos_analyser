@@ -48,5 +48,5 @@ class HTTPStreamer(Streamer):
     parameters = {'locations': '-9.472656,36.160774,4.809570,43.153753'}
     response = self.twitter_request(url, "POST", parameters)
     for line in response:
-      yield line.strip()
+      yield self.create_message(line.strip())
 
