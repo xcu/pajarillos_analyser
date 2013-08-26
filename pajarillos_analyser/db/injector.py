@@ -35,9 +35,10 @@ class DBInjector(object):
       if not current_time_chunk:
         current_time_chunk = self.get_time_chunk_fromkey(message._process_by_time(TIMECHUNK_SIZE))
       if not current_time_chunk.tweet_fits(message):
-        logger.info("saving chunk in db because key {0} doesnt match tweet with date {1}".\
+        if current_time_chunk.changed_since_retrieval:
+          logger.info("saving chunk in db because key {0} doesnt match tweet with date {1}".\
                        format(current_time_chunk.start_date, message.get_creation_time()))
-        self.save_chunk(current_time_chunk)
+          self.save_chunk(current_time_chunk)
         current_time_chunk = self.get_time_chunk_fromkey(message._process_by_time(TIMECHUNK_SIZE))
       current_time_chunk.update(message)
     self.save_chunk(current_time_chunk)

@@ -22,6 +22,7 @@ class TimeChunk(object): #, json.JSONEncoder):
     self.hashtags = defaultdict(int, kwargs.get('hashtags', defaultdict(int)))
     self.users = set(kwargs.get('users', set()))
     self.tweet_ids = set(kwargs.get('tweet_ids', set()))
+    self.changed_since_retrieval = False
 
   def default(self):
     #overrides the one in JSONEncoder
@@ -53,6 +54,7 @@ class TimeChunk(object): #, json.JSONEncoder):
     self._update_list_generic(message.get_user_mentions(), self.user_mentions)
     self._update_list_generic(message.get_hashtags(), self.hashtags)
     self.users.add(message.get_user())
+    self.changed_since_retrieval = True
 
   def _update_list_generic(self, new_list, attr):
     for item in iter(new_list):
