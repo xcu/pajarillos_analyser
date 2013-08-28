@@ -10,13 +10,51 @@ logger = logging.getLogger('db_injector')
 TIMECHUNK_SIZE = 1
 
 
-class DBInjector(object):
+class Injector(object):
   def __init__(self, connection, db_name, collection_name, flush=True, index=''):
     self.collection = connection[db_name][collection_name]
     if flush:
       self.collection.drop()
     if index:
       self.collection.create_index(index, unique=True)
+
+  def to_db(self, message, last_returned_val):
+    pass
+
+  def last_to_db(self, last_val):
+    pass
+
+  def from_db(self):
+    pass
+
+
+class TweetInjector(Injector):
+  def to_db(self, message, last_returned_val):
+    self.collection.update({'id': int(message.get_id())}, message.message, upsert=True)
+
+
+class TimeChunkInjector(Injector):
+  def to_db(self, message, current_time_chunk):
+    ''' puts the message in the database '''
+    if not current_time_chunk:
+      current_time_chunk = self.get_time_chunk_fromkey(message._process_by_time(TIMECHUNK_SIZE))
+    if not current_time_chunk.tweet_fits(message):
+      if current_time_chunk.changed_since_retrieval:
+        logger.info("saving chunk in db because key {0} doesnt match tweet with date {1}".\
+                     format(current_time_chunk.start_date, message.get_creation_time()))
+        self.save_chunk(current_time_chunk)
+      current_time_chunk = self.get_time_chunk_fromkey(message._process_by_time(TIMECHUNK_SIZE))
+    current_time_chunk.update(message)
+    return current_time_chunk
+
+  def last_to_db(self, current_time_chunk):
+    self.save_chunk(current_time_chunk)
+
+  def from_db(self):
+    with open("processed", 'w') as f:
+      for chunk_dict in self.collection.find():
+        f.write(self.load_chunk(chunk_dict).pretty())
+        f.write('\n')
 
   def get_time_chunk_fromkey(self, start):
     '''
@@ -28,20 +66,12 @@ class DBInjector(object):
     chunk_dict = self._get_chunk(start).next()
     return self.load_chunk(chunk_dict)
 
-  def insert_time_chunks(self, streamer):
-    ''' puts the messages given by the streamer in the database '''
-    current_time_chunk = None
-    for message in streamer.messages():
-      if not current_time_chunk:
-        current_time_chunk = self.get_time_chunk_fromkey(message._process_by_time(TIMECHUNK_SIZE))
-      if not current_time_chunk.tweet_fits(message):
-        if current_time_chunk.changed_since_retrieval:
-          logger.info("saving chunk in db because key {0} doesnt match tweet with date {1}".\
-                       format(current_time_chunk.start_date, message.get_creation_time()))
-          self.save_chunk(current_time_chunk)
-        current_time_chunk = self.get_time_chunk_fromkey(message._process_by_time(TIMECHUNK_SIZE))
-      current_time_chunk.update(message)
-    self.save_chunk(current_time_chunk)
+  def chunk_exists(self, start_time):
+    return self._get_chunk(start_time).count()
+
+  def _get_chunk(self, start_time):
+    time_chunk = self.collection.find({'start_date': convert_date(start_time)})
+    return time_chunk
 
   def all_ids_from_db(self):
     all_ids = set()
@@ -58,17 +88,4 @@ class DBInjector(object):
 
   def load_chunk(self, chunk_dict):
     return TimeChunk(chunk_dict.pop('size'), chunk_dict.pop('start_date'), **chunk_dict)
-
-  def chunk_exists(self, start_time):
-    return self._get_chunk(start_time).count()
-
-  def _get_chunk(self, start_time):
-    time_chunk = self.collection.find({'start_date': convert_date(start_time)})
-    return time_chunk
-
-  def dump_db_info(self):
-    with open("processed", 'w') as f:
-      for chunk_dict in self.collection.find():
-        f.write(self.load_chunk(chunk_dict).pretty())
-        f.write('\n')
 

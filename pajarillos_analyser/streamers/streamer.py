@@ -7,10 +7,10 @@ class Streamer(object):
   def __init__(self):
     self.mf = MessageFactory()
 
-  def create_message(self, serialized_message):
-    deserialized_message = json.loads(serialized_message)
+  def create_message(self, message, serialized=True):
+    if serialized:
+      deserialized_message = json.loads(message)
+    else:
+      deserialized_message = message
     return self.mf.create_message(deserialized_message)
-
-  def messages(self):
-    pass
 

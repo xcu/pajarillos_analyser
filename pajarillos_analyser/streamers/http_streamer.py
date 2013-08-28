@@ -37,7 +37,7 @@ class HTTPStreamer(Streamer):
     response = opener.open(url, encoded_post_data)
     return response
 
-  def messages(self):
+  def __iter__(self):
     #url = "https://stream.twitter.com/1.1/statuses/sample.json"
     #parameters = {}
     #response = twitterreq(url, "GET", parameters)

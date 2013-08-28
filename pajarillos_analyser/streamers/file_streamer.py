@@ -5,7 +5,7 @@ class FileStreamer(Streamer):
     super(FileStreamer, self).__init__()
     self.file_name = file_name
 
-  def messages(self):
+  def __iter__(self):
     with open(self.file_name) as f:
       for line in f:
         yield self.create_message(line)
