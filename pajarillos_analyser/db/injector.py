@@ -40,8 +40,8 @@ class TimeChunkInjector(Injector):
       current_time_chunk = self.get_time_chunk_fromkey(message._process_by_time(TIMECHUNK_SIZE))
     if not current_time_chunk.tweet_fits(message):
       if current_time_chunk.changed_since_retrieval:
-        logger.info("saving chunk in db because key {0} doesnt match tweet with date {1}".\
-                     format(current_time_chunk.start_date, message.get_creation_time()))
+        logger.info("saving chunk in db because key {0} doesnt match tweet {1} with date {2}".\
+                     format(current_time_chunk.start_date, message.get_id(), message.get_creation_time()))
         self.save_chunk(current_time_chunk)
       current_time_chunk = self.get_time_chunk_fromkey(message._process_by_time(TIMECHUNK_SIZE))
     current_time_chunk.update(message)
@@ -82,8 +82,8 @@ class TimeChunkInjector(Injector):
   def save_chunk(self, chunk):
     if chunk:
       key = convert_date(chunk.start_date)
-      logger.info("updating db with key {0}. Chunk with size {1}".format(key,
-                                                                         len(chunk.tweet_ids)))
+      logger.info("updating db with key {0}. Chunk with {1} subchunks of size ".format(key,
+                                                                  ','.join([str(len(sc.tweet_ids)) for sc in chunk.subchunks])))
       self.collection.update({'start_date': key}, chunk.default(), upsert=True)
 
   def load_chunk(self, chunk_dict):
