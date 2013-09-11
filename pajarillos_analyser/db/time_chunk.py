@@ -97,7 +97,33 @@ class TimeChunk(object):
     self.subchunks.append(new_chunk)
     return new_chunk
 
+  def reduce_subchunks(self):
+    def update_dict(append_to, append_from):
+      for key in append_from.iterkeys():
+        append_to[key] += append_from[key]
+    def update_set(new_set, old_set):
+      for item in old_set:
+        new_set.add(item)
+    terms = defaultdict(int)
+    user_mentions = defaultdict(int)
+    hashtags = defaultdict(int)
+    users = set()
+    tweet_ids = set()
+    for sb in self.subchunks:
+      update_dict(terms, sb.terms_dict)
+      update_dict(hashtags, sb.hashtags)
+      update_dict(user_mentions, sb.user_mentions)
+      update_set(users, sb.users)
+      update_set(tweet_ids, sb.tweet_ids)
+    terms = dict(i for i in terms.iteritems() if len(i[0]) > 2)
+    terms = sorted(terms.items(), key=lambda x: x[1], reverse=True)[:20]
+    user_mentions = sorted(user_mentions.items(), key=lambda x: x[1], reverse=True)[:5]
+    hashtags = sorted(hashtags.items(), key=lambda x: x[1], reverse=True)[:5]
+    return (terms, user_mentions, hashtags, len(users), len(tweet_ids))
+
+
   def pretty(self):
-    return 'date: {0} size: {1} tweets: {2} users: {3} hashtags: {4} terms: {5}'.format(self.start_date, self.size, len(self.tweet_ids), len(self.users), sorted(self.hashtags.items(), key=lambda x: x[1], reverse=True)[:5], sorted(self.terms_dict.items(), key=lambda x: x[1], reverse=True)[:5])
+    results = self.reduce_subchunks()    
+    return 'Most used terms: {0} \n Most popular hashtags: {1} \n Users with more mentions: {2} \n Number of users writing tweets: {3} \n Tweets written: {4}'.format(*results)
 # tweets.update({'id_str': "368308360074240000"}, { '$set': {'text': 'u fagget'}})
 

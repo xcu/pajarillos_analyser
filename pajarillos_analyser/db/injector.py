@@ -50,11 +50,18 @@ class TimeChunkInjector(Injector):
   def last_to_db(self, current_time_chunk):
     self.save_chunk(current_time_chunk)
 
-  def from_db(self):
-    with open("processed", 'w') as f:
-      for chunk_dict in self.collection.find():
-        f.write(self.load_chunk(chunk_dict).pretty())
-        f.write('\n')
+  def from_db(self, chunk_id):
+    res = self.collection.find({'start_date': int(chunk_id)})
+    if not res.count():
+      return 'no chunk found'
+    return self.load_chunk(res.next()).reduce_subchunks()
+#    with open("processed", 'w') as f:
+#      for chunk_dict in self.collection.find():
+#        f.write(self.load_chunk(chunk_dict).pretty())
+#        f.write('\n')
+
+  def load_range(self, start, how_many):
+    pass
 
   def get_time_chunk_fromkey(self, start):
     '''
