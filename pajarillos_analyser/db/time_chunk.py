@@ -119,11 +119,12 @@ class TimeChunk(object):
     terms = sorted(terms.items(), key=lambda x: x[1], reverse=True)[:20]
     user_mentions = sorted(user_mentions.items(), key=lambda x: x[1], reverse=True)[:5]
     hashtags = sorted(hashtags.items(), key=lambda x: x[1], reverse=True)[:5]
-    return (terms, user_mentions, hashtags, len(users), len(tweet_ids))
+    return (terms, user_mentions, hashtags, users, len(tweet_ids))
 
 
   def pretty(self):
-    results = self.reduce_subchunks()    
+    results = self.reduce_subchunks()
+    results[3] = len(results[3])
     return 'Most used terms: {0} \n Most popular hashtags: {1} \n Users with more mentions: {2} \n Number of users writing tweets: {3} \n Tweets written: {4}'.format(*results)
 # tweets.update({'id_str': "368308360074240000"}, { '$set': {'text': 'u fagget'}})
 
