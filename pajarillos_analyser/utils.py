@@ -10,6 +10,13 @@ def convert_date(date):
     date = date - date.utcoffset()
   return int(calendar.timegm(date.timetuple()))
 
+def update_dict(append_to, append_from):
+  for key in append_from.iterkeys():
+    append_to[key] += append_from[key]
+
+def update_set(new_set, old_set):
+  for item in old_set:
+    new_set.add(item)
 
 def chunks_are_equal(col1, col2):
   cols_are_the_same(col1, col2)

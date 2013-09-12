@@ -1,5 +1,6 @@
 from db.time_chunk import TimeChunk
-from utils import convert_date
+from utils import convert_date, update_dict, update_set
+from collections import defaultdict
 import logging
 logging.basicConfig(filename='tweets.log',
                     level=logging.DEBUG,
@@ -47,7 +48,7 @@ class TimeChunkInjector(Injector):
     self.save_chunk(current_time_chunk)
 
   def from_db(self, chunk_id):
-    res = self.collection.find({'start_date': int(chunk_id)})
+    res = self.dbmgr.get({'start_date': int(chunk_id)})
     if not res.count():
       return 'no chunk found'
     return self.load_chunk(res.next()).reduce_subchunks()
@@ -56,8 +57,27 @@ class TimeChunkInjector(Injector):
 #        f.write(self.load_chunk(chunk_dict).pretty())
 #        f.write('\n')
 
-  def load_range(self, start, how_many):
-    pass
+  def reduce_range(self, lower, upper):
+    terms = defaultdict(int)
+    user_mentions = defaultdict(int)
+    hashtags = defaultdict(int)
+    users = set()
+    tweet_ids = 0
+    logger.info("reducing in range {0} {1}".format(lower, upper))
+    for chunk_dict in self.dbmgr.get_chunk_range(lower, upper):
+      reduced_chunk = self.load_chunk(chunk_dict).reduce_subchunks()
+      update_dict(terms, reduced_chunk[0])
+      update_dict(hashtags, reduced_chunk[1])
+      update_dict(user_mentions, reduced_chunk[2])
+      update_set(users, reduced_chunk[3])
+      tweet_ids += reduced_chunk[4]
+
+    logger.info("hashtags is {0}".format(hashtags))
+    terms = dict(i for i in terms.iteritems() if len(i[0]) > 2)
+    terms = sorted(terms.items(), key=lambda x: x[1], reverse=True)[:20]
+    user_mentions = sorted(user_mentions.items(), key=lambda x: x[1], reverse=True)[:5]
+    hashtags = sorted(hashtags.items(), key=lambda x: x[1], reverse=True)[:5]
+    return (terms, user_mentions, hashtags, users, tweet_ids)
 
   def get_time_chunk_fromkey(self, start):
     '''

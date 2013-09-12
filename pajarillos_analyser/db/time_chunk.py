@@ -1,6 +1,6 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
-from utils import convert_date
+from utils import convert_date, update_dict, update_set
 import logging
 logging.basicConfig(filename='tweets.log',
                     level=logging.DEBUG,
@@ -98,12 +98,6 @@ class TimeChunk(object):
     return new_chunk
 
   def reduce_subchunks(self):
-    def update_dict(append_to, append_from):
-      for key in append_from.iterkeys():
-        append_to[key] += append_from[key]
-    def update_set(new_set, old_set):
-      for item in old_set:
-        new_set.add(item)
     terms = defaultdict(int)
     user_mentions = defaultdict(int)
     hashtags = defaultdict(int)
@@ -116,9 +110,9 @@ class TimeChunk(object):
       update_set(users, sb.users)
       update_set(tweet_ids, sb.tweet_ids)
     terms = dict(i for i in terms.iteritems() if len(i[0]) > 2)
-    terms = sorted(terms.items(), key=lambda x: x[1], reverse=True)[:20]
-    user_mentions = sorted(user_mentions.items(), key=lambda x: x[1], reverse=True)[:5]
-    hashtags = sorted(hashtags.items(), key=lambda x: x[1], reverse=True)[:5]
+    terms = dict(sorted(terms.items(), key=lambda x: x[1], reverse=True)[:20])
+    user_mentions = dict(sorted(user_mentions.items(), key=lambda x: x[1], reverse=True)[:5])
+    hashtags = dict(sorted(hashtags.items(), key=lambda x: x[1], reverse=True)[:5])
     return (terms, user_mentions, hashtags, users, len(tweet_ids))
 
 

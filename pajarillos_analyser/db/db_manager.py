@@ -11,7 +11,7 @@ class DBManager(object):
     self.collection.update(doc_id, doc, upsert=True)
 
   def get(self, query):
-    return self.collection(find(query))
+    return self.collection.find(query)
 
   def get_all(self):
     return self.collection.find()

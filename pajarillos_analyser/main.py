@@ -1,6 +1,7 @@
 from pymongo import MongoClient
 from db.injector import TimeChunkInjector, TweetInjector
 from db.injector_manager import InjectorManager
+from db.db_manager import DBManager
 from streamers.file_streamer import FileStreamer
 from streamers.http_streamer import HTTPStreamer
 from streamers.db_streamer import DBStreamer
@@ -22,8 +23,7 @@ if __name__ == '__main__':
   #streamer = DBStreamer(client, 'raw', 'tweets')
   #chunks_are_equal(client['stats']['time_chunks'], client['stats']['time_chunks_fromdb'])
   streamer = HTTPStreamer(**dict(line.split() for line in open("token_data")))
-  ti = TweetInjector(client, 'raw', 'tweets', index='id', flush=False)
-  tci = TimeChunkInjector(client, 'stats', 'time_chunks', index='start_date', flush=True)
-  im = InjectorManager(registered_injectors=(ti, tci))
+  tci = TimeChunkInjector(DBManager(client, 'stats', 'time_chunks', index='start_date'))
+  im = InjectorManager(registered_injectors=(tci,))
   im.to_db(streamer)
 
