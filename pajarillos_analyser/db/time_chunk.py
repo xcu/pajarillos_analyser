@@ -109,12 +109,19 @@ class TimeChunk(object):
       update_dict(user_mentions, sb.user_mentions)
       update_set(users, sb.users)
       update_set(tweet_ids, sb.tweet_ids)
-    terms = dict(i for i in terms.iteritems() if len(i[0]) > 2)
+    terms = dict(i for i in terms.iteritems() if not self.filter_term(i[0]))
     terms = dict(sorted(terms.items(), key=lambda x: x[1], reverse=True)[:20])
     user_mentions = dict(sorted(user_mentions.items(), key=lambda x: x[1], reverse=True)[:5])
     hashtags = dict(sorted(hashtags.items(), key=lambda x: x[1], reverse=True)[:5])
     return (terms, user_mentions, hashtags, users, len(tweet_ids))
 
+  def filter_term(self, term):
+    if len(term) <= 2:
+      return True
+    filter_list = set(['ante', 'con', 'como', 'del', 'desde', 'entre', 'este', 'estas', 'estos', 'hacia',
+                       'hasta', 'las', 'los', 'mas', 'nos', 'para', 'pero', 'por', 'que', 'segun', 'ser',
+                       'sin', 'una', 'unas', 'uno', 'unos'])
+    return term.lower() in filter_list
 
   def pretty(self):
     results = self.reduce_subchunks()
