@@ -11,12 +11,8 @@ TIMECHUNK_SIZE = 1
 
 
 class Injector(object):
-  def __init__(self, connection, db_name, collection_name, flush=True, index=''):
-    self.collection = connection[db_name][collection_name]
-    if flush:
-      self.collection.drop()
-    if index:
-      self.collection.create_index(index, unique=True)
+  def __init__(self, dbmgr):
+    self.dbmgr = dbmgr
 
   def to_db(self, message, last_returned_val):
     pass
@@ -30,7 +26,7 @@ class Injector(object):
 
 class TweetInjector(Injector):
   def to_db(self, message, last_returned_val):
-    self.collection.update({'id': int(message.get_id())}, message.message, upsert=True)
+    self.dbmgr.update_doc({'id': int(message.get_id())}, message.message)
 
 
 class TimeChunkInjector(Injector):
@@ -77,12 +73,12 @@ class TimeChunkInjector(Injector):
     return self._get_chunk(start_time).count()
 
   def _get_chunk(self, start_time):
-    time_chunk = self.collection.find({'start_date': convert_date(start_time)})
+    time_chunk = self.dbmgr.get({'start_date': convert_date(start_time)})
     return time_chunk
 
   def all_ids_from_db(self):
     all_ids = set()
-    for chunk_dict in self.collection.find():
+    for chunk_dict in self.dbmgr.get_all():
       all_ids.update(self.load_chunk(chunk_dict).tweet_ids)
     return all_ids
 
@@ -91,7 +87,7 @@ class TimeChunkInjector(Injector):
       key = convert_date(chunk.start_date)
       logger.info("updating db with key {0}. Chunk with {1} subchunks of size ".format(key,
                                                                   ','.join([str(len(sc.tweet_ids)) for sc in chunk.subchunks])))
-      self.collection.update({'start_date': key}, chunk.default(), upsert=True)
+      self.dbmgr.update_doc({'start_date': key}, chunk.default())
 
   def load_chunk(self, chunk_dict):
     return TimeChunk(chunk_dict.pop('size'), chunk_dict.pop('start_date'), **chunk_dict)
