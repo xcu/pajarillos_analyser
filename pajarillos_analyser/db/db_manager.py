@@ -1,4 +1,11 @@
+from db.time_chunk import TimeChunkMgr
 from utils import convert_date
+import logging
+logging.basicConfig(filename='tweets.log',
+                    level=logging.DEBUG,
+                    format='%(asctime)s %(levelname)s %(message)s')
+logger = logging.getLogger('db_mgr')
+
 
 
 class DBManager(object):
@@ -10,14 +17,20 @@ class DBManager(object):
       self.db.collection.create_index(index, unique=True)
 
   def get_chunk(self, sdate):
+    logger.info("db manager get_chunk: sdate is {0}".format(sdate))
     chunk_id = int(convert_date(sdate))
     res = self.db.get({'start_date': chunk_id})
     if not res.count():
       return ''
     return res.next()
 
-  def get_chunk_range(self,injector, sdate, edate):
-    return injector.reduce_range(convert_date(sdate), convert_date(edate))
+  def get_chunk_range(self, sdate, edate):
+    def chunk_obj_generator(chunks):
+      mgr = TimeChunkMgr()
+      for chunk_dict in chunks:
+        yield mgr.load_chunk(chunk_dict).reduce_subchunks()
+    chunk_dicts = self.db.get_chunk_range(convert_date(sdate), convert_date(edate))
+    return TimeChunkMgr().reduce_chunks(chunk_obj_generator(chunk_dicts), postprocess=True)
 
   def update_doc(self, doc_id, doc):
     return self.db.update_doc(doc_id, doc)
@@ -36,7 +49,7 @@ class DBHandler(object):
     self.collection.update(doc_id, doc, upsert=True)
 
   def get(self, query):
-    return self.collection.find(query))
+    return self.collection.find(query)
 
   def get_all(self):
     return self.collection.find()

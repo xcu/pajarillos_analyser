@@ -1,6 +1,6 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
-from utils import convert_date, reduce_chunks, CHUNK_DATA
+from utils import convert_date, update_dict, update_set, CHUNK_DATA
 import logging
 logging.basicConfig(filename='tweets.log',
                     level=logging.DEBUG,
@@ -8,6 +8,52 @@ logging.basicConfig(filename='tweets.log',
 logger = logging.getLogger('time_chunk')
 
 SUBCHUNK_SIZE = 100
+
+
+class TimeChunkMgr(object):
+  def load_chunk(self, chunk_dict):
+    return TimeChunk(chunk_dict.pop('size'), chunk_dict.pop('start_date'), **chunk_dict)
+
+  def reduce_chunks(self, chunk_iterable, postprocess=False):
+    terms = defaultdict(int)
+    user_mentions = defaultdict(int)
+    hashtags = defaultdict(int)
+    users = set()
+    tweet_ids = set()
+    for chunk_dict in chunk_iterable:
+      update_dict(terms, chunk_dict['terms'])
+      update_dict(hashtags, chunk_dict['hashtags'])
+      update_dict(user_mentions, chunk_dict['user_mentions'])
+      update_set(users, chunk_dict['users'])
+      update_set(tweet_ids, chunk_dict['tweet_ids'])
+    if postprocess:
+      terms, user_mentions, hashtags, users, tweet_ids = \
+                         self.postprocess_chunks(terms, user_mentions, hashtags, users, tweet_ids)
+    keys = CHUNK_DATA
+    values = (terms, user_mentions, hashtags, users, tweet_ids)
+    return dict(zip(keys, values))
+
+  def postprocess_chunks(self, terms, user_mentions, hashtags, users, tweet_ids):
+    def get_sorted(iterable, trim=0):
+      sorted_list = sorted(iterable.iteritems(), key=lambda x: x[1], reverse=True)
+      if trim:
+        return sorted_list[:trim]
+      return sorted_list
+    terms = dict(i for i in terms.iteritems() if not self.filter_term(i[0]))
+    return (get_sorted(terms, 20),
+            get_sorted(user_mentions, 10),
+            get_sorted(hashtags, 10),
+            len(users),
+            len(tweet_ids))    
+
+  def filter_term(self, term):
+    if len(term) <= 2:
+      return True
+    filter_list = set(['ante', 'con', 'como', 'del', 'desde', 'entre', 'este', 'estas', 'estos', 'hacia',
+                       'hasta', 'las', 'los', 'mas', 'nos', 'para', 'pero', 'por', 'que', 'segun', 'ser',
+                       'sin', 'una', 'unas', 'uno', 'unos'])
+    return term.lower() in filter_list
+
 
 class SubChunk(object):
   def __init__(self, parent_chunk, **kwargs):
@@ -27,7 +73,7 @@ class SubChunk(object):
 
   def update(self, message):
     self.tweet_ids.add(message.get_id())
-    self._update_dict_generic(message.get_terms_dict(), self.terms)
+    self._update_dict_generic(message.get_terms(), self.terms)
     self._update_list_generic(message.get_user_mentions(), self.user_mentions)
     self._update_list_generic(message.get_hashtags(), self.hashtags)
     self.users.add(message.get_user())
@@ -96,7 +142,7 @@ class TimeChunk(object):
     return new_chunk
 
   def reduce_subchunks(self):
-    return reduce_chunks([sc.default() for sc in self.subchunks])
+    return TimeChunkMgr().reduce_chunks([sc.default() for sc in self.subchunks])
 
   def pretty(self):
     results = self.reduce_subchunks()

@@ -1,5 +1,5 @@
-from db.time_chunk import TimeChunk
-from utils import convert_date, reduce_chunks
+from db.time_chunk import TimeChunk, TimeChunkMgr
+from utils import convert_date
 from collections import defaultdict
 import logging
 logging.basicConfig(filename='tweets.log',
@@ -51,7 +51,7 @@ class TimeChunkInjector(Injector):
     res = self.dbmgr.get_chunk(sdate)
     if not res:
       return 'no chunk found'
-    return self.load_chunk(res).reduce_subchunks()
+    return TimeChunkMgr().load_chunk(res).reduce_subchunks()
 #    with open("processed", 'w') as f:
 #      for chunk_dict in self.collection.find():
 #        f.write(self.load_chunk(chunk_dict).pretty())
@@ -60,31 +60,31 @@ class TimeChunkInjector(Injector):
   def reduce_range(self, lower, upper):
     def format_chunks(chunks):
       for chunk in chunks:
-        yield self.load_chunk(chunk).reduce_subchunks()
+        yield TimeChunkMgr().load_chunk(chunk).reduce_subchunks()
     chunks_in_range = self.dbmgr.get_chunk_range(lower, upper)
-    return reduce_chunks(format_chunks(chunks_in_range))
+    return TimeChunkMgr().reduce_chunks(format_chunks(chunks_in_range))
 
   def get_time_chunk_fromkey(self, start):
     '''
     loads the time chunk from the db if it exists or creates a new one
     @param start datetime object to match a key in the db
     '''
+    logger.info("trying to get chunk from date {0}".format(start))
     if not self.chunk_exists(start):
       return TimeChunk(TIMECHUNK_SIZE, start)
-    chunk_dict = self._get_chunk(start).next()
-    return self.load_chunk(chunk_dict)
+    chunk_dict = self._get_chunk(start)
+    return TimeChunkMgr().load_chunk(chunk_dict)
 
   def chunk_exists(self, start_time):
-    return self._get_chunk(start_time).count()
+    return self._get_chunk(start_time)
 
   def _get_chunk(self, start_time):
-    time_chunk = self.dbmgr.get_chunk({'start_date': convert_date(start_time)})
-    return time_chunk
+    return self.dbmgr.get_chunk(start_time)
 
   def all_ids_from_db(self):
     all_ids = set()
     for chunk_dict in self.dbmgr:
-      all_ids.update(self.load_chunk(chunk_dict).tweet_ids)
+      all_ids.update(TimeChunkMgr().load_chunk(chunk_dict).tweet_ids)
     return all_ids
 
   def save_chunk(self, chunk):
@@ -93,7 +93,4 @@ class TimeChunkInjector(Injector):
       logger.info("updating db with key {0}. Chunk with {1} subchunks of size ".format(key,
                                                                   ','.join([str(len(sc.tweet_ids)) for sc in chunk.subchunks])))
       self.dbmgr.update_doc({'start_date': key}, chunk.default())
-
-  def load_chunk(self, chunk_dict):
-    return TimeChunk(chunk_dict.pop('size'), chunk_dict.pop('start_date'), **chunk_dict)
 
