@@ -80,7 +80,7 @@ class Tweet(Message):
     delta = timedelta(minutes=creation_time.minute % time_chunk_size)
     return reset_seconds(creation_time - delta)
 
-  def get_terms_dict(self):
+  def get_terms(self):
     terms = defaultdict(int)
     terms_to_filter = ['gt', 'lt']
     # we need more than 1 separator

@@ -1,6 +1,6 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
-from utils import convert_date, update_dict, update_set
+from utils import convert_date, reduce_chunks, CHUNK_DATA
 import logging
 logging.basicConfig(filename='tweets.log',
                     level=logging.DEBUG,
@@ -13,7 +13,7 @@ class SubChunk(object):
   def __init__(self, parent_chunk, **kwargs):
     self.parent_chunk = parent_chunk
     # when retrieved from kwargs we're not sure they are defaultdict
-    self.terms_dict = defaultdict(int, kwargs.get('terms', defaultdict(int)))
+    self.terms = defaultdict(int, kwargs.get('terms', defaultdict(int)))
     self.user_mentions = defaultdict(int, kwargs.get('user_mentions', defaultdict(int)))
     self.hashtags = defaultdict(int, kwargs.get('hashtags', defaultdict(int)))
     self.users = set(kwargs.get('users', set()))
@@ -21,15 +21,13 @@ class SubChunk(object):
     self.changed_since_retrieval = False
 
   def default(self):
-    return {'terms': self.terms_dict,
-            'user_mentions': self.user_mentions,
-            'hashtags': self.hashtags,
-            'users': list(self.users),
-            'tweet_ids': list(self.tweet_ids)}
+    keys = CHUNK_DATA
+    values = (self.terms, self.user_mentions, self.hashtags, list(self.users), list(self.tweet_ids))
+    return dict(zip(keys, values))
 
   def update(self, message):
     self.tweet_ids.add(message.get_id())
-    self._update_dict_generic(message.get_terms_dict(), self.terms_dict)
+    self._update_dict_generic(message.get_terms_dict(), self.terms)
     self._update_list_generic(message.get_user_mentions(), self.user_mentions)
     self._update_list_generic(message.get_hashtags(), self.hashtags)
     self.users.add(message.get_user())
@@ -98,30 +96,7 @@ class TimeChunk(object):
     return new_chunk
 
   def reduce_subchunks(self):
-    terms = defaultdict(int)
-    user_mentions = defaultdict(int)
-    hashtags = defaultdict(int)
-    users = set()
-    tweet_ids = set()
-    for sb in self.subchunks:
-      update_dict(terms, sb.terms_dict)
-      update_dict(hashtags, sb.hashtags)
-      update_dict(user_mentions, sb.user_mentions)
-      update_set(users, sb.users)
-      update_set(tweet_ids, sb.tweet_ids)
-    terms = dict(i for i in terms.iteritems() if not self.filter_term(i[0]))
-    terms = dict(sorted(terms.items(), key=lambda x: x[1], reverse=True)[:20])
-    user_mentions = dict(sorted(user_mentions.items(), key=lambda x: x[1], reverse=True)[:5])
-    hashtags = dict(sorted(hashtags.items(), key=lambda x: x[1], reverse=True)[:5])
-    return (terms, user_mentions, hashtags, users, len(tweet_ids))
-
-  def filter_term(self, term):
-    if len(term) <= 2:
-      return True
-    filter_list = set(['ante', 'con', 'como', 'del', 'desde', 'entre', 'este', 'estas', 'estos', 'hacia',
-                       'hasta', 'las', 'los', 'mas', 'nos', 'para', 'pero', 'por', 'que', 'segun', 'ser',
-                       'sin', 'una', 'unas', 'uno', 'unos'])
-    return term.lower() in filter_list
+    return reduce_chunks([sc.default() for sc in self.subchunks])
 
   def pretty(self):
     results = self.reduce_subchunks()
