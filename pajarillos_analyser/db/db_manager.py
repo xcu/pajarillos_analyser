@@ -24,12 +24,12 @@ class DBManager(object):
       return ''
     return res.next()
 
-  def get_chunk_range(self, sdate, edate):
+  def get_reduced_chunk_range(self, sdate, edate):
     def chunk_obj_generator(chunks):
       mgr = TimeChunkMgr()
       for chunk_dict in chunks:
         yield mgr.load_chunk(chunk_dict).reduce_subchunks()
-    chunk_dicts = self.db.get_chunk_range(convert_date(sdate), convert_date(edate))
+    chunk_dicts = self.db.get_reduced_chunk_range(convert_date(sdate), convert_date(edate))
     return TimeChunkMgr().reduce_chunks(chunk_obj_generator(chunk_dicts), postprocess=True)
 
   def update_doc(self, doc_id, doc):
@@ -54,6 +54,6 @@ class DBHandler(object):
   def get_all(self):
     return self.collection.find()
 
-  def get_chunk_range(self, lower, upper):
+  def get_reduced_chunk_range(self, lower, upper):
     return self.collection.find({'start_date': {'$gte': lower, '$lte': upper}})
 

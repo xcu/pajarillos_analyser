@@ -27,6 +27,13 @@ def update_set(new_set, old_set):
   for item in old_set:
     new_set.add(item)
 
+#def all_ids_from_db():
+#  all_ids = set()
+#  for chunk_dict in self.dbmgr:
+#    all_ids.update(TimeChunkMgr().load_chunk(chunk_dict).tweet_ids)
+#  return all_ids
+
+
 def chunks_are_equal(col1, col2):
   cols_are_the_same(col1, col2)
   cols_are_the_same(col2, col1)

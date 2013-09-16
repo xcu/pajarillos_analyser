@@ -21,9 +21,6 @@ class Injector(object):
   def last_to_db(self, last_val):
     pass
 
-  def from_db(self):
-    pass
-
 
 class TweetInjector(Injector):
   def to_db(self, message, last_returned_val):
@@ -32,35 +29,22 @@ class TweetInjector(Injector):
 
 class TimeChunkInjector(Injector):
   def to_db(self, message, current_time_chunk):
-    ''' puts the message in the database '''
+    ''' updates current_time_chunk with message and stores the chunk in the db if necessary '''
     if not current_time_chunk:
-      current_time_chunk = self.get_time_chunk_fromkey(message._process_by_time(TIMECHUNK_SIZE))
+      current_time_chunk = self.get_chunk_from_date(message.get_associated_chunk(TIMECHUNK_SIZE))
     if not current_time_chunk.tweet_fits(message):
       if current_time_chunk.changed_since_retrieval:
         logger.info("saving chunk in db because key {0} doesnt match tweet {1} with date {2}".\
                      format(current_time_chunk.start_date, message.get_id(), message.get_creation_time()))
         self.save_chunk(current_time_chunk)
-      current_time_chunk = self.get_time_chunk_fromkey(message._process_by_time(TIMECHUNK_SIZE))
+      current_time_chunk = self.get_chunk_from_date(message.get_associated_chunk(TIMECHUNK_SIZE))
     current_time_chunk.update(message)
     return current_time_chunk
 
   def last_to_db(self, current_time_chunk):
     self.save_chunk(current_time_chunk)
 
-  def from_db(self, sdate):
-    res = self.dbmgr.get_chunk(sdate)
-    if not res:
-      return 'no chunk found'
-    return TimeChunkMgr().load_chunk(res).reduce_subchunks()
-
-  def reduce_range(self, lower, upper):
-    def format_chunks(chunks):
-      for chunk in chunks:
-        yield TimeChunkMgr().load_chunk(chunk).reduce_subchunks()
-    chunks_in_range = self.dbmgr.get_chunk_range(lower, upper)
-    return TimeChunkMgr().reduce_chunks(format_chunks(chunks_in_range))
-
-  def get_time_chunk_fromkey(self, start):
+  def get_chunk_from_date(self, start):
     '''
     loads the time chunk from the db if it exists or creates a new one
     @param start datetime object to match a key in the db
@@ -76,12 +60,6 @@ class TimeChunkInjector(Injector):
 
   def _get_chunk(self, start_time):
     return self.dbmgr.get_chunk(start_time)
-
-  def all_ids_from_db(self):
-    all_ids = set()
-    for chunk_dict in self.dbmgr:
-      all_ids.update(TimeChunkMgr().load_chunk(chunk_dict).tweet_ids)
-    return all_ids
 
   def save_chunk(self, chunk):
     if chunk:

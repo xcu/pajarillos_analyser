@@ -65,7 +65,7 @@ class Tweet(Message):
       f.write('{0}\t'.format(self.get_creation_time(process=False).encode('utf-8')))
       f.write('\n')
 
-  def _process_by_time(self, time_chunk_size):
+  def get_associated_chunk(self, time_chunk_size):
     ''' returns the time chunk the tweet belongs to
     @params time_chunk_size, integer with the number of minutes delimiting a
      chunk. 60 must be divisible by it'''
