@@ -59,7 +59,7 @@ class TestTweet(unittest.TestCase):
 
   def test_get_creation_time_empty(self):
     tweet = Tweet(json.loads(tweet_samples.hashtags_tweet))
-    tweet.message.created_at = ''
+    tweet.message['created_at'] = ''
     self.assertEquals(tweet.get_creation_time(), None)
 
   def test_get_id(self):
@@ -74,13 +74,28 @@ class TestTweet(unittest.TestCase):
     tweet = Tweet(json.loads(tweet_samples.hashtags_tweet))
     self.assertEquals(tweet.get_favorite_count(), 6)
 
+  def test_get_user(self):
+    tweet = Tweet(json.loads(tweet_samples.user_mentions_tweet))
+    self.assertEquals(tweet.get_user(), 'AumS_TTD')
+    self.assertEquals(tweet.get_user(field='id'), 533771089)
+
+  def test_get_user_wrong_field(self):
+    tweet = Tweet(json.loads(tweet_samples.user_mentions_tweet))
+    self.assertEquals(tweet.get_user(field='i dont exist'), '')
+
   def test_process_by_time(self):
     tweet = Tweet(json.loads(tweet_samples.hashtags_tweet))
     self.assertEquals(tweet._process_by_time(10).time(), time(8, 30))
-    tweet.message.created_at = u'Wed Aug 07 08:44:39 +0000 2013'
+    tweet.message['created_at'] = u'Wed Aug 07 08:44:39 +0000 2013'
     self.assertEquals(tweet._process_by_time(10).time(), time(8, 40))
     self.assertRaises(Exception, tweet._process_by_time, 50)
     self.assertRaises(Exception, tweet._process_by_time, 120)
-    tweet.message.created_at = u'Wed Aug 07 00:59:39 +0000 2013'
+    tweet.message['created_at'] = u'Wed Aug 07 00:59:39 +0000 2013'
     self.assertEquals(tweet._process_by_time(30).time(), time(0, 30))
+
+  def test_get_terms(self):
+    tweet = Tweet(json.loads(tweet_samples.hashtags_tweet))
+    self.assertEquals(tweet.get_terms(), {u'RT': 1, u'HITFOLLOWSTEAM': 1, u'HitFollowsJp': 1, u'TeamFollowBack': 1, u'OpenFollow': 1, u'SougoFollow': 1, u'ONLY': 1, u'FOLLOWERS': 1, u'WANT': 1, u'THF': 1, u'NEW': 1, u'YOU': 1, u'TFBJP': 1, u'RETWEET': 1, u'MustFollow': 1, u'IF': 1})
+    tweet = Tweet(json.loads(tweet_samples.extended_ascii_tweet))
+    self.assertEquals(tweet.get_terms(), {u'el': 2, u'gracias': 1, u'la': 1, u'tienen': 1, u'pero': 1, u'al': 1, u'da': 1, u'los': 1, u'miedo': 2, u'que': 1, u'ra': 1, u'misma': 1, u'problemas': 1, u'amor': 2, u'z': 1, u'desaparece': 1, u'Todos': 1, u'nos': 1})
 
