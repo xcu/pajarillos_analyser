@@ -52,10 +52,6 @@ class TimeChunkInjector(Injector):
     if not res:
       return 'no chunk found'
     return TimeChunkMgr().load_chunk(res).reduce_subchunks()
-#    with open("processed", 'w') as f:
-#      for chunk_dict in self.collection.find():
-#        f.write(self.load_chunk(chunk_dict).pretty())
-#        f.write('\n')
 
   def reduce_range(self, lower, upper):
     def format_chunks(chunks):
