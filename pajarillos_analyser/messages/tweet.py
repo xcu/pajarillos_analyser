@@ -9,7 +9,6 @@ import re
 class Tweet(Message):
   def get_text(self):
     return self.message.get('text', '')
-    #return self.message.text
 
   def get_user_mentions(self, prop='screen_name'):
     ''' 
@@ -19,9 +18,7 @@ class Tweet(Message):
     '''
     if not prop:
       return self.message.get('entities', {}).get('user_mentions')
-      #return self.message.entities.user_mentions
     return [mention.get(prop, '') for mention in self.message.get('entities', {}).get('user_mentions', '')]
-    #return [getattr(mention, prop) for mention in self.message.entities.user_mentions]
 
   def get_hashtags(self):
     return [ht.get('text', '') for ht in self.message.get('entities', {}).get('hashtags', '')]
@@ -82,11 +79,9 @@ class Tweet(Message):
 
   def get_terms(self):
     terms = defaultdict(int)
-    terms_to_filter = ['gt', 'lt']
     # we need more than 1 separator
     # http://stackoverflow.com/questions/1059559/python-strings-split-with-multiple-separators
     for word in re.findall(r"[\w']+", self.get_text()):
-      if word not in terms_to_filter:
-        terms[word] += 1
+      terms[word] += 1
     return terms
 
