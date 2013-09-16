@@ -20,7 +20,7 @@ client = MongoClient('localhost', 27017)
 
 if __name__ == '__main__':
   # streamer = FileStreamer('spanish_results')
-  #streamer = DBStreamer(client, 'raw', 'tweets')
+  #streamer = DBStreamer(DBManager(client, 'raw', 'tweets'))
   #chunks_are_equal(client['stats']['time_chunks'], client['stats']['time_chunks_fromdb'])
   streamer = HTTPStreamer(**dict(line.split() for line in open("token_data")))
   tci = TimeChunkInjector(DBManager(client, 'stats', 'time_chunks', index='start_date'))
