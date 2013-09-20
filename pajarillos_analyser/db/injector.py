@@ -62,9 +62,8 @@ class TimeChunkInjector(Injector):
     return self.dbmgr.get_chunk(start_time)
 
   def save_chunk(self, chunk):
+    for sc in chunk.subchunks:
     if chunk:
-      key = convert_date(chunk.start_date)
-      logger.info("updating db with key {0}. Chunk with {1} subchunks of size ".format(key,
-                                                                  ','.join([str(len(sc.tweet_ids)) for sc in chunk.subchunks])))
-      self.dbmgr.update_doc({'start_date': key}, chunk.default())
+      self.dbmgr.upsert_chunk(chunk.default())
 
+  def save_subchunk(self, subchunk):

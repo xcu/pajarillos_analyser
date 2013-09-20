@@ -18,7 +18,7 @@ class DBManager(object):
 
   def get_chunk(self, sdate):
     logger.info("db manager get_chunk: sdate is {0}".format(sdate))
-    chunk_id = int(convert_date(sdate))
+    chunk_id = TimeChunkMgr().get_date_db_key(sdate)
     res = self.db.get({'start_date': chunk_id})
     if not res.count():
       return ''
@@ -32,6 +32,12 @@ class DBManager(object):
     chunk_dicts = self.db.get_reduced_chunk_range(mgr.get_date_db_key(sdate),
                                                   mgr.get_date_db_key(edate))
     return TimeChunkMgr().reduce_chunks(chunk_obj_generator(chunk_dicts), postprocess=True)
+
+  def upsert_chunk(self, chunk_dict):
+    # probably chunk.default should return the datetime and not the posix seconds
+    logger.info("updating db with key {0}. Chunk containing subchunks with size: {1}".format(key,
+                          ','.join([str(len(sc['tweet_ids'])) for sc in chunk_dict['subchunks']])))
+    self.update_doc({'start_date': chunk_dict['start_date']}, chunk_dict)
 
   def update_doc(self, doc_id, doc):
     return self.db.update_doc(doc_id, doc)

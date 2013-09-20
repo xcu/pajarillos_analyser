@@ -117,6 +117,7 @@ class FullSubChunk(SubChunk):
 class SubChunk(object):
   def __init__(self, parent_chunk, **kwargs):
     self.parent_chunk = parent_chunk
+    self.obj_id = kwargs.get('obj_id', None)
     # when retrieved from kwargs we're not sure they are defaultdict
     self.tweet_ids = set(kwargs.get('tweet_ids', set()))
     self.users = set(kwargs.get('users', set()))
