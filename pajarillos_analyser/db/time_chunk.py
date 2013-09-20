@@ -1,6 +1,8 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
+from db.db_manager import DBManager
 from utils import convert_date, update_dict, update_set, CHUNK_DATA
+import bisect
 import logging
 logging.basicConfig(filename='tweets.log',
                     level=logging.DEBUG,
@@ -14,7 +16,22 @@ class TimeChunkMgr(object):
   def load_chunk(self, chunk_dict):
     return TimeChunk(chunk_dict.pop('size'), chunk_dict.pop('start_date'), **chunk_dict)
 
+  def convert_to_full_subchunk(self, subchunk):
+    def to_sorted_list(dict_from):
+      return sorted([HeapTuple(t) for t in dict_from.iteritems()])
+    if not subchunk.is_full():
+      raise Exception("subchunk is not full, cannot convert it")
+    kwargs = {'tweet_ids': subchunk.tweet_ids,
+              'users': subchunk.users,
+              'terms': to_sorted_list(subchunk.terms),
+              'user_mentions': to_sorted_list(subchunk.user_mentions),
+              'hashtags': to_sorted_list(subchunk.hashtags)}
+    return FullSubChunk(subchunk.parent, **kwargs)
+
   def reduce_chunks(self, chunk_iterable, postprocess=False):
+    ''' reduces an iterable of chunks to a single chunk, merging their contents.
+        Each chunk included in the iterable is expected to be a dictionary
+    '''
     terms = defaultdict(int)
     user_mentions = defaultdict(int)
     hashtags = defaultdict(int)
@@ -54,17 +71,62 @@ class TimeChunkMgr(object):
                        'sin', 'una', 'unas', 'uno', 'unos'])
     return term.lower() in filter_list
 
+  def get_date_db_key(self, date):
+    return convert_date(date)
+
+
+class HeapTuple(object):
+  ''' just a wrapper for tuples in which we define a descending order for the number
+      of occurrences. This will be useful to sort elements in heaps '''
+  def __init__(self, tuple):
+    self.t = tuple
+
+  def __cmp__(self, other):
+    return other.t[1] - self.t[1]
+
+  def default(self):
+    return self.t
+
+class FullSubChunk(SubChunk):
+  ''' when a subchunk is full fast lookup to perform updates quickly stop being important
+      Instead, we need to keep records sorted to be able to do the mergesort algorithm
+      as fast as possible.
+  '''
+  def __init__(self, parent_chunk, **kwargs):
+    self.parent_chunk = parent_chunk
+    self.tweet_ids = set(kwargs.get('tweet_ids', set()))
+    assert self.is_full(), "subchunk is not full {0}".format(len(self.tweet_ids))
+    self.users = set(kwargs.get('users', set()))
+    self.changed_since_retrieval = False
+    self.terms = kwargs.get('terms', [])
+    self.user_mentions = kwargs.get('user_mentions', [])
+    self.hashtags = kwargs.get('hashtags', [])
+
+  def update(self, message):
+    raise Exception("Full subchunk cannot be updated")
+
+  def default(self):
+    keys = CHUNK_DATA
+    values = ((t.default() for t in self.terms),
+             (t.default() for t in self.user_mentions),
+             (t.default() for t in self.hashtags),
+             list(self.users),
+             list(self.tweet_ids))
+    return dict(zip(keys, values))
 
 class SubChunk(object):
   def __init__(self, parent_chunk, **kwargs):
     self.parent_chunk = parent_chunk
     # when retrieved from kwargs we're not sure they are defaultdict
+    self.tweet_ids = set(kwargs.get('tweet_ids', set()))
+    self.users = set(kwargs.get('users', set()))
+    self.changed_since_retrieval = False
     self.terms = defaultdict(int, kwargs.get('terms', defaultdict(int)))
     self.user_mentions = defaultdict(int, kwargs.get('user_mentions', defaultdict(int)))
     self.hashtags = defaultdict(int, kwargs.get('hashtags', defaultdict(int)))
-    self.users = set(kwargs.get('users', set()))
-    self.tweet_ids = set(kwargs.get('tweet_ids', set()))
-    self.changed_since_retrieval = False
+
+  def is_full(self):
+    return len(self.tweet_ids) >= SUBCHUNK_SIZE
 
   def default(self):
     keys = CHUNK_DATA
@@ -102,14 +164,17 @@ class TimeChunk(object):
     self.subchunks = []
     subchunks = kwargs.get('subchunks', [])
     for subchunk in subchunks:
-      self.subchunks.append(SubChunk(convert_date(self.start_date), **subchunk))
+      self.subchunks.append(SubChunk(self.get_db_key(), **subchunk))
     self.changed_since_retrieval = False
+
+  def get_db_key(self):
+    return TimeChunkMgr().get_date_db_key(self.start_date)
 
   def default(self):
     # json.loads(aJsonString, object_hook=json_util.object_hook)
     # json.dumps(self.start_date, default=json_util.default)
     return {'size': self.size,
-            'start_date': convert_date(self.start_date),
+            'start_date': self.get_db_key(),
             'subchunk_size': SUBCHUNK_SIZE,
             'subchunks': [sb.default() for sb in self.subchunks]}
 

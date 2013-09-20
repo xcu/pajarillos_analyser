@@ -85,3 +85,9 @@ class Tweet(Message):
       terms[word] += 1
     return terms
 
+  def get_location(self):
+    return self.message.get("coordinates", "")
+
+  def get_lang(self):
+    return self.message.get("lang", "")
+

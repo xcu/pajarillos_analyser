@@ -29,7 +29,8 @@ class DBManager(object):
       mgr = TimeChunkMgr()
       for chunk_dict in chunks:
         yield mgr.load_chunk(chunk_dict).reduce_subchunks()
-    chunk_dicts = self.db.get_reduced_chunk_range(convert_date(sdate), convert_date(edate))
+    chunk_dicts = self.db.get_reduced_chunk_range(mgr.get_date_db_key(sdate),
+                                                  mgr.get_date_db_key(edate))
     return TimeChunkMgr().reduce_chunks(chunk_obj_generator(chunk_dicts), postprocess=True)
 
   def update_doc(self, doc_id, doc):
@@ -37,6 +38,7 @@ class DBManager(object):
 
   def __iter__(self):
     return self.db.get_all()
+
 
 
 class DBHandler(object):
