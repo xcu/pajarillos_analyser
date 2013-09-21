@@ -24,7 +24,7 @@ class TestChunkInjector(MongoTest):
 
 chunk_dict1 = {'size': 1,
                'start_date': 1376646480,
-               'subchunks': [{
+               'complete_subchunks': [{
                  'terms': {'term1': 1, 'term2': 2},
                  'hashtags': {'one': 3, 'two': 5},
                  'users': ['user1'],
@@ -34,7 +34,7 @@ chunk_dict1 = {'size': 1,
 
 chunk_dict2 = {'size': 1,
                'start_date': 1376646540,
-               'subchunks': [{
+               'complete_subchunks': [{
                  'terms': {'term1': 10},
                  'hashtags': {'one': 2, 'three': 3},
                  'users': ['user3', 'user5', 'user9001'],
@@ -44,7 +44,7 @@ chunk_dict2 = {'size': 1,
 
 chunk_dict3 = {'size': 1,
                'start_date': 1376646600,
-               'subchunks': [{
+               'complete_subchunks': [{
                  'terms': {'term1': 50, 'term2': 2, 'term10': 1},
                  'hashtags': {},
                  'users': ['user7'],
@@ -62,11 +62,11 @@ class TestTimeChunkMgr(unittest.TestCase):
     self.assertEquals(type(c), TimeChunk)
     self.assertEquals(c.size, 1)
     self.assertEquals(c.start_date, datetime(2013, 8, 16, 9, 48))
-    self.assertEquals(c.subchunks[0].terms, {'term1': 1, 'term2': 2})
-    self.assertEquals(c.subchunks[0].hashtags, {'one': 3, 'two': 5})
-    self.assertEquals(c.subchunks[0].users, set(['user1']))
-    self.assertEquals(c.subchunks[0].tweet_ids, set([1, 2, 3, 4]))
-    self.assertEquals(c.subchunks[0].user_mentions, {})
+    self.assertEquals(c.complete_subchunks[0].terms, {'term1': 1, 'term2': 2})
+    self.assertEquals(c.complete_subchunks[0].hashtags, {'one': 3, 'two': 5})
+    self.assertEquals(c.complete_subchunks[0].users, set(['user1']))
+    self.assertEquals(c.complete_subchunks[0].tweet_ids, set([1, 2, 3, 4]))
+    self.assertEquals(c.complete_subchunks[0].user_mentions, {})
 
   def test_reduce_chunks(self):
     l = [chunk_dict1, chunk_dict2, chunk_dict3]

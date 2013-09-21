@@ -162,10 +162,10 @@ class TimeChunk(object):
       self.start_date = start_date
     else:
       self.start_date = datetime.utcfromtimestamp(start_date)
-    self.subchunks = []
-    subchunks = kwargs.get('subchunks', [])
+    self.complete_subchunks = []
+    subchunks = kwargs.get('complete_subchunks', [])
     for subchunk in subchunks:
-      self.subchunks.append(SubChunk(self.get_db_key(), **subchunk))
+      self.complete_subchunks.append(SubChunk(self.get_db_key(), **subchunk))
     self.changed_since_retrieval = False
 
   def get_db_key(self):
@@ -177,7 +177,7 @@ class TimeChunk(object):
     return {'size': self.size,
             'start_date': self.get_db_key(),
             'subchunk_size': SUBCHUNK_SIZE,
-            'subchunks': [sb.default() for sb in self.subchunks]}
+            'complete_subchunks': [sb.default() for sb in self.complete_subchunks]}
 
   def tweet_fits(self, tweet):
     # returns True if the tweet is inside the time chunk window
@@ -197,18 +197,18 @@ class TimeChunk(object):
 
   def is_duplicate(self, message):
     # membership test is O(1) on average in sets, this should be cheap
-    return any(subchunk.is_duplicate(message) for subchunk in self.subchunks)
+    return any(subchunk.is_duplicate(message) for subchunk in self.complete_subchunks)
 
   def get_first_subchunk(self, message):
-    for subchunk in self.subchunks:
+    for subchunk in self.complete_subchunks:
       if len(subchunk.tweet_ids) < SUBCHUNK_SIZE:
         return subchunk
     new_chunk = SubChunk(convert_date(self.start_date))
-    self.subchunks.append(new_chunk)
+    self.complete_subchunks.append(new_chunk)
     return new_chunk
 
   def reduce_subchunks(self):
-    return TimeChunkMgr().reduce_chunks([sc.default() for sc in self.subchunks])
+    return TimeChunkMgr().reduce_chunks([sc.default() for sc in self.complete_subchunks])
 
   def pretty(self):
     results = self.reduce_subchunks()

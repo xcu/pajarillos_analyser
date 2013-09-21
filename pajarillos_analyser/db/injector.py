@@ -62,7 +62,7 @@ class TimeChunkInjector(Injector):
     return self.dbmgr.get_chunk(start_time)
 
   def save_chunk(self, chunk):
-    for sc in chunk.subchunks:
+    for sc in chunk.complete_subchunks:
     if chunk:
       self.dbmgr.upsert_chunk(chunk.default())
 

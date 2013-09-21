@@ -45,10 +45,10 @@ class TestChunkInjector(MongoTest):
   def test_get_chunk_from_date(self):
     # first one that exists:
     c = self.tci.get_chunk_from_date(datetime.utcfromtimestamp(1376646540))
-    self.assertEquals(c.subchunks[0].tweet_ids, set([u'368308364012691456']))
+    self.assertEquals(c.complete_subchunks[0].tweet_ids, set([u'368308364012691456']))
     # now a random one
     c = self.tci.get_chunk_from_date(datetime.utcfromtimestamp(1076646540))
-    self.assertEquals(c.subchunks, [])
+    self.assertEquals(c.complete_subchunks, [])
 
   def test_chunk_exists(self):
     self.assertTrue(self.tci.chunk_exists(datetime.utcfromtimestamp(1376646540)))
@@ -56,12 +56,12 @@ class TestChunkInjector(MongoTest):
 
   def test_save_chunk(self):
     c = self.tci.get_chunk_from_date(datetime.utcfromtimestamp(1376646540))
-    self.assertEquals(len(c.subchunks), 1)
-    c.subchunks = []
+    self.assertEquals(len(c.complete_subchunks), 1)
+    c.complete_subchunks = []
     self.tci.save_chunk(c)
     # pick it again and check it changed
     c = self.tci.get_chunk_from_date(datetime.utcfromtimestamp(1376646540))
-    self.assertEquals(len(c.subchunks), 0)
+    self.assertEquals(len(c.complete_subchunks), 0)
 
 
 # BELONGS TO DB MGR!!

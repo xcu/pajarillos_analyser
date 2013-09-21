@@ -36,7 +36,7 @@ class DBManager(object):
   def upsert_chunk(self, chunk_dict):
     # probably chunk.default should return the datetime and not the posix seconds
     logger.info("updating db with key {0}. Chunk containing subchunks with size: {1}".format(key,
-                          ','.join([str(len(sc['tweet_ids'])) for sc in chunk_dict['subchunks']])))
+                          ','.join([str(len(sc['tweet_ids'])) for sc in chunk_dict['complete_subchunks']])))
     self.update_doc({'start_date': chunk_dict['start_date']}, chunk_dict)
 
   def update_doc(self, doc_id, doc):
