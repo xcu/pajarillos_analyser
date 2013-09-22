@@ -9,8 +9,11 @@ logger = logging.getLogger('db_mgr')
 
 
 class DBManager(object):
-  def __init__(self, conn, db_name, collection_name, flush=False, index=''):
+  def __init__(self, conn, db_name, collection_name, sc='subchunks', flush=False, index=''):
     self.db = DBHandler(conn[db_name][collection_name])
+    # If I see this piece of code after one week I'll kill you
+    # YOU KNOW I WILL BECAUSE I AM YOU
+    self.sc = DBHandler(conn[db_name][sc]
     if flush:
       self.db.collection.drop()
     if index:
@@ -39,6 +42,9 @@ class DBManager(object):
                           ','.join([str(len(sc['tweet_ids'])) for sc in chunk_dict['complete_subchunks']])))
     self.update_doc({'start_date': chunk_dict['start_date']}, chunk_dict)
 
+  def save_subchunk(self, subchunk):
+    return self.sc.insert_doc(subchunk.default())
+
   def update_doc(self, doc_id, doc):
     return self.db.update_doc(doc_id, doc)
 
@@ -55,6 +61,9 @@ class DBHandler(object):
 
   def update_doc(self, doc_id, doc):
     self.collection.update(doc_id, doc, upsert=True)
+
+  def insert_doc(self, doc):
+    return self.collection.insert(doc)
 
   def get(self, query):
     return self.collection.find(query)

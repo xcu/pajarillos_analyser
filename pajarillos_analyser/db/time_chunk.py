@@ -191,9 +191,16 @@ class TimeChunk(object):
     if self.is_duplicate(message):
       logger.info('duplicated tweet: {0} not processing!'.format(message.get_id()))
       return
-    subchunk = self.get_first_subchunk(message)
-    subchunk.update(message)
+    #subchunk = self.get_first_subchunk(message)
+    self.current_subchunk.update(message)
     self.changed_since_retrieval = True
+
+  def has_full_subchunk(self):
+    return self.current_chunk.is_full()
+
+  def update_current_subchunk(self, id_in_db):
+    self.complete_subchunks.append(id_in_db)
+    self.current_subchunk = SubChunk(convert_date(self.start_date))
 
   def is_duplicate(self, message):
     # membership test is O(1) on average in sets, this should be cheap
@@ -201,7 +208,7 @@ class TimeChunk(object):
 
   def get_first_subchunk(self, message):
     for subchunk in self.complete_subchunks:
-      if len(subchunk.tweet_ids) < SUBCHUNK_SIZE:
+      if not subchunk.is_full():
         return subchunk
     new_chunk = SubChunk(convert_date(self.start_date))
     self.complete_subchunks.append(new_chunk)

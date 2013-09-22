@@ -38,6 +38,9 @@ class TimeChunkInjector(Injector):
                      format(current_time_chunk.start_date, message.get_id(), message.get_creation_time()))
         self.save_chunk(current_time_chunk)
       current_time_chunk = self.get_chunk_from_date(message.get_associated_chunk(TIMECHUNK_SIZE))
+    if current_time_chunk.has_full_subchunk():
+      id_ref = self.dbmgr.save_subchunk(current_time_chunk.current_subchunk)
+      current_time_chunk.update_current_subchunk(id_ref)
     current_time_chunk.update(message)
     return current_time_chunk
 
