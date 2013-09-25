@@ -1,8 +1,7 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
-from db.db_manager import DBManager
-from utils import convert_date, update_dict, update_set, CHUNK_DATA
-import bisect
+from utils import get_top_occurrences, sorted_list_from_dict, \
+                  convert_date, update_dict, update_set, CHUNK_DATA
 import logging
 logging.basicConfig(filename='tweets.log',
                     level=logging.DEBUG,
@@ -14,19 +13,22 @@ SUBCHUNK_SIZE = 100
 
 class TimeChunkMgr(object):
   def load_chunk(self, chunk_dict):
-    return TimeChunk(chunk_dict.pop('size'), chunk_dict.pop('start_date'), **chunk_dict)
+    return TimeChunk(chunk_dict.pop('size'),
+                     self.get_date_from_db_key(chunk_dict.pop('start_date')),
+                     **chunk_dict)
 
-  def convert_to_full_subchunk(self, subchunk):
-    def to_sorted_list(dict_from):
-      return sorted([HeapTuple(t) for t in dict_from.iteritems()])
-    if not subchunk.is_full():
-      raise Exception("subchunk is not full, cannot convert it")
-    kwargs = {'tweet_ids': subchunk.tweet_ids,
-              'users': subchunk.users,
-              'terms': to_sorted_list(subchunk.terms),
-              'user_mentions': to_sorted_list(subchunk.user_mentions),
-              'hashtags': to_sorted_list(subchunk.hashtags)}
-    return FullSubChunk(subchunk.parent, **kwargs)
+  def get_top_occurrences(self, subchunk_list, number_of_occurrences):
+    ''' returns the top number_of_occurrences out of subchunk_list for each
+        dictionary in the subchunk -namely, the terms, the hashtags and the user mentions
+    '''
+    occurrence_keys = ('terms', 'user_mentions', 'hashtags')
+    results = {}
+    for occurrence_key in occurrence_keys:
+      dicts = [sc[occurrence_key] for sc in subchunk_list]
+      results[occurrence_key] = get_top_occurences(number_of_occurrences,
+                                                   dicts,
+                                                   [sorted_list_from_dict(d) for d in dicts])
+    return results
 
   def reduce_chunks(self, chunk_iterable, postprocess=False):
     ''' reduces an iterable of chunks to a single chunk, merging their contents.
@@ -74,18 +76,9 @@ class TimeChunkMgr(object):
   def get_date_db_key(self, date):
     return convert_date(date)
 
+  def get_date_from_db_key(self, key):
+    return datetime.utcfromtimestamp(start_date)
 
-class HeapTuple(object):
-  ''' just a wrapper for tuples in which we define a descending order for the number
-      of occurrences. This will be useful to sort elements in heaps '''
-  def __init__(self, tuple):
-    self.t = tuple
-
-  def __cmp__(self, other):
-    return other.t[1] - self.t[1]
-
-  def default(self):
-    return self.t
 
 class FullSubChunk(SubChunk):
   ''' when a subchunk is full fast lookup to perform updates quickly stop being important
@@ -158,14 +151,11 @@ class TimeChunk(object):
     # size of chunk in minutes
     assert not 60 % size, "60 must be divisible by TimeChunk size"
     self.size = size
-    if isinstance(start_date, datetime):
-      self.start_date = start_date
-    else:
-      self.start_date = datetime.utcfromtimestamp(start_date)
+    self.start_date = start_date
     self.complete_subchunks = []
     subchunks = kwargs.get('complete_subchunks', [])
     for subchunk in subchunks:
-      self.complete_subchunks.append(SubChunk(self.get_db_key(), **subchunk))
+      self.complete_subchunks.append(SubChunk(self.start_date, **subchunk))
     self.changed_since_retrieval = False
 
   def get_db_key(self):
@@ -195,12 +185,12 @@ class TimeChunk(object):
     self.current_subchunk.update(message)
     self.changed_since_retrieval = True
 
-  def has_full_subchunk(self):
+  def current_subchunk_isfull(self):
     return self.current_chunk.is_full()
 
   def update_current_subchunk(self, id_in_db):
     self.complete_subchunks.append(id_in_db)
-    self.current_subchunk = SubChunk(convert_date(self.start_date))
+    self.current_subchunk = SubChunk(self.start_date)
 
   def is_duplicate(self, message):
     # membership test is O(1) on average in sets, this should be cheap
@@ -210,7 +200,7 @@ class TimeChunk(object):
     for subchunk in self.complete_subchunks:
       if not subchunk.is_full():
         return subchunk
-    new_chunk = SubChunk(convert_date(self.start_date))
+    new_chunk = SubChunk(self.start_date)
     self.complete_subchunks.append(new_chunk)
     return new_chunk
 

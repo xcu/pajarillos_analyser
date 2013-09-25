@@ -72,4 +72,6 @@ class TestTimeChunkMgr(unittest.TestCase):
     l = [chunk_dict1, chunk_dict2, chunk_dict3]
     self.assertEquals(self.mgr.reduce_chunks(l), {})
 
+  def test_get_top_occurrences(self):
+    pass
 
