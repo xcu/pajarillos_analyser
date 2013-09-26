@@ -1,4 +1,4 @@
-from db.time_chunk import TimeChunkMgr
+from db.chunk_container import ChunkMgr
 from utils import convert_date
 import logging
 logging.basicConfig(filename='tweets.log',
@@ -9,7 +9,7 @@ logger = logging.getLogger('db_mgr')
 
 
 class DBManager(object):
-  def __init__(self, conn, db_name, collection_name, sc='subchunks', flush=False, index=''):
+  def __init__(self, conn, db_name, collection_name, sc='chunks', flush=False, index=''):
     self.db = DBHandler(conn[db_name][collection_name])
     # If I see this piece of code after one week I'll kill you
     # YOU KNOW I WILL BECAUSE I AM YOU
@@ -21,7 +21,7 @@ class DBManager(object):
 
   def get_chunk(self, sdate):
     logger.info("db manager get_chunk: sdate is {0}".format(sdate))
-    chunk_id = TimeChunkMgr().get_date_db_key(sdate)
+    chunk_id = ChunkMgr().get_date_db_key(sdate)
     res = self.db.get({'start_date': chunk_id})
     if not res.count():
       return ''
@@ -29,21 +29,21 @@ class DBManager(object):
 
   def get_reduced_chunk_range(self, sdate, edate):
     def chunk_obj_generator(chunks):
-      mgr = TimeChunkMgr()
+      mgr = ChunkMgr()
       for chunk_dict in chunks:
-        yield mgr.load_chunk(chunk_dict).reduce_subchunks()
+        yield mgr.load_chunk(chunk_dict).reduce_chunks()
     chunk_dicts = self.db.get_reduced_chunk_range(mgr.get_date_db_key(sdate),
                                                   mgr.get_date_db_key(edate))
-    return TimeChunkMgr().reduce_chunks(chunk_obj_generator(chunk_dicts), postprocess=True)
+    return ChunkMgr().reduce_chunks(chunk_obj_generator(chunk_dicts), postprocess=True)
 
   def upsert_chunk(self, chunk_dict):
     # probably chunk.default should return the datetime and not the posix seconds
-    logger.info("updating db with key {0}. Chunk containing subchunks with size: {1}".format(key,
-                          ','.join([str(len(sc['tweet_ids'])) for sc in chunk_dict['complete_subchunks']])))
+    logger.info("updating db with key {0}. Chunk containing chunks with size: {1}".format(key,
+                          ','.join([str(len(sc['tweet_ids'])) for sc in chunk_dict['complete_chunks']])))
     self.update_doc({'start_date': chunk_dict['start_date']}, chunk_dict)
 
-  def save_subchunk(self, subchunk):
-    return self.sc.insert_doc(subchunk.default())
+  def save_chunk(self, chunk):
+    return self.sc.insert_doc(chunk.default())
 
   def update_doc(self, doc_id, doc):
     return self.db.update_doc(doc_id, doc)

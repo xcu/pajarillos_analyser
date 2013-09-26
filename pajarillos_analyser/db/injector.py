@@ -1,4 +1,4 @@
-from db.time_chunk import TimeChunk, TimeChunkMgr
+from db.chunk_container import ChunkContainer, ChunkMgr
 from utils import convert_date
 from collections import defaultdict
 import logging
@@ -27,25 +27,25 @@ class TweetInjector(Injector):
     self.dbmgr.update_doc({'id': int(message.get_id())}, message.message)
 
 
-class TimeChunkInjector(Injector):
-  def to_db(self, message, current_time_chunk):
-    ''' updates current_time_chunk with message and stores the chunk in the db if necessary '''
-    if not current_time_chunk:
-      current_time_chunk = self.get_chunk_from_date(message.get_associated_chunk(TIMECHUNK_SIZE))
-    if not current_time_chunk.tweet_fits(message):
-      if current_time_chunk.changed_since_retrieval:
+class ChunkInjector(Injector):
+  def to_db(self, message, current_chunk_container):
+    ''' updates current_chunk_container with message and stores the chunk in the db if necessary '''
+    if not current_chunk_container:
+      current_chunk_container = self.get_chunk_from_date(message.get_associated_container(TIMECHUNK_SIZE))
+    if not current_chunk_container.tweet_fits(message):
+      if current_chunk_container.changed_since_retrieval:
         logger.info("saving chunk in db because key {0} doesnt match tweet {1} with date {2}".\
-                     format(current_time_chunk.start_date, message.get_id(), message.get_creation_time()))
-        self.save_chunk(current_time_chunk)
-      current_time_chunk = self.get_chunk_from_date(message.get_associated_chunk(TIMECHUNK_SIZE))
-    if current_time_chunk.current_subchunk_isfull():
-      id_ref = self.dbmgr.save_subchunk(current_time_chunk.current_subchunk)
-      current_time_chunk.update_current_subchunk(id_ref)
-    current_time_chunk.update(message)
-    return current_time_chunk
+                     format(current_chunk_container.start_date, message.get_id(), message.get_creation_time()))
+        self.save_chunk(current_chunk_container)
+      current_chunk_container = self.get_chunk_from_date(message.get_associated_container(TIMECHUNK_SIZE))
+    if current_chunk_container.current_chunk_isfull():
+      id_ref = self.dbmgr.save_chunk(current_chunk_container.current_chunk)
+      current_chunk_container.update_current_chunk(id_ref)
+    current_chunk_container.update(message)
+    return current_chunk_container
 
-  def last_to_db(self, current_time_chunk):
-    self.save_chunk(current_time_chunk)
+  def last_to_db(self, current_chunk_container):
+    self.save_chunk(current_chunk_container)
 
   def get_chunk_from_date(self, start):
     '''
@@ -54,9 +54,9 @@ class TimeChunkInjector(Injector):
     '''
     logger.info("trying to get chunk from date {0}".format(start))
     if not self.chunk_exists(start):
-      return TimeChunk(TIMECHUNK_SIZE, start)
+      return ChunkContainer(TIMECHUNK_SIZE, start)
     chunk_dict = self._get_chunk(start)
-    return TimeChunkMgr().load_chunk(chunk_dict)
+    return ChunkMgr().load_chunk(chunk_dict)
 
   def chunk_exists(self, start_time):
     return self._get_chunk(start_time)
@@ -65,8 +65,8 @@ class TimeChunkInjector(Injector):
     return self.dbmgr.get_chunk(start_time)
 
   def save_chunk(self, chunk):
-    for sc in chunk.complete_subchunks:
+    for sc in chunk.complete_chunks:
     if chunk:
       self.dbmgr.upsert_chunk(chunk.default())
 
-  def save_subchunk(self, subchunk):
+  def save_chunk(self, chunk):

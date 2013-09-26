@@ -6,25 +6,25 @@ import logging
 logging.basicConfig(filename='tweets.log',
                     level=logging.DEBUG,
                     format='%(asctime)s %(levelname)s %(message)s')
-logger = logging.getLogger('time_chunk')
+logger = logging.getLogger('chunk_container')
 
 SUBCHUNK_SIZE = 100
 
 
-class TimeChunkMgr(object):
+class ChunkMgr(object):
   def load_chunk(self, chunk_dict):
-    return TimeChunk(chunk_dict.pop('size'),
+    return ChunkContainer(chunk_dict.pop('size'),
                      self.get_date_from_db_key(chunk_dict.pop('start_date')),
                      **chunk_dict)
 
-  def get_top_occurrences(self, subchunk_list, number_of_occurrences):
-    ''' returns the top number_of_occurrences out of subchunk_list for each
-        dictionary in the subchunk -namely, the terms, the hashtags and the user mentions
+  def get_top_occurrences(self, chunk_list, number_of_occurrences):
+    ''' returns the top number_of_occurrences out of chunk_list for each
+        dictionary in the chunk -namely, the terms, the hashtags and the user mentions
     '''
     occurrence_keys = ('terms', 'user_mentions', 'hashtags')
     results = {}
     for occurrence_key in occurrence_keys:
-      dicts = [sc[occurrence_key] for sc in subchunk_list]
+      dicts = [sc[occurrence_key] for sc in chunk_list]
       results[occurrence_key] = get_top_occurences(number_of_occurrences,
                                                    dicts,
                                                    [sorted_list_from_dict(d) for d in dicts])
@@ -80,15 +80,15 @@ class TimeChunkMgr(object):
     return datetime.utcfromtimestamp(start_date)
 
 
-class FullSubChunk(SubChunk):
-  ''' when a subchunk is full fast lookup to perform updates quickly stop being important
+class FullChunk(Chunk):
+  ''' when a chunk is full fast lookup to perform updates quickly stop being important
       Instead, we need to keep records sorted to be able to do the mergesort algorithm
       as fast as possible.
   '''
   def __init__(self, parent_chunk, **kwargs):
     self.parent_chunk = parent_chunk
     self.tweet_ids = set(kwargs.get('tweet_ids', set()))
-    assert self.is_full(), "subchunk is not full {0}".format(len(self.tweet_ids))
+    assert self.is_full(), "chunk is not full {0}".format(len(self.tweet_ids))
     self.users = set(kwargs.get('users', set()))
     self.changed_since_retrieval = False
     self.terms = kwargs.get('terms', [])
@@ -96,7 +96,7 @@ class FullSubChunk(SubChunk):
     self.hashtags = kwargs.get('hashtags', [])
 
   def update(self, message):
-    raise Exception("Full subchunk cannot be updated")
+    raise Exception("Full chunk cannot be updated")
 
   def default(self):
     keys = CHUNK_DATA
@@ -107,7 +107,7 @@ class FullSubChunk(SubChunk):
              list(self.tweet_ids))
     return dict(zip(keys, values))
 
-class SubChunk(object):
+class Chunk(object):
   def __init__(self, parent_chunk, **kwargs):
     self.parent_chunk = parent_chunk
     self.obj_id = kwargs.get('obj_id', None)
@@ -146,28 +146,28 @@ class SubChunk(object):
       attr[key] += new_dict[key]
 
 
-class TimeChunk(object):
+class ChunkContainer(object):
   def __init__(self, size, start_date, **kwargs):
     # size of chunk in minutes
-    assert not 60 % size, "60 must be divisible by TimeChunk size"
+    assert not 60 % size, "60 must be divisible by ChunkContainer size"
     self.size = size
     self.start_date = start_date
-    self.complete_subchunks = []
-    subchunks = kwargs.get('complete_subchunks', [])
-    for subchunk in subchunks:
-      self.complete_subchunks.append(SubChunk(self.start_date, **subchunk))
+    self.complete_chunks = []
+    chunks = kwargs.get('complete_chunks', [])
+    for chunk in chunks:
+      self.complete_chunks.append(Chunk(self.start_date, **chunk))
     self.changed_since_retrieval = False
 
   def get_db_key(self):
-    return TimeChunkMgr().get_date_db_key(self.start_date)
+    return ChunkMgr().get_date_db_key(self.start_date)
 
   def default(self):
     # json.loads(aJsonString, object_hook=json_util.object_hook)
     # json.dumps(self.start_date, default=json_util.default)
     return {'size': self.size,
             'start_date': self.get_db_key(),
-            'subchunk_size': SUBCHUNK_SIZE,
-            'complete_subchunks': [sb.default() for sb in self.complete_subchunks]}
+            'chunk_size': SUBCHUNK_SIZE,
+            'complete_chunks': [sb.default() for sb in self.complete_chunks]}
 
   def tweet_fits(self, tweet):
     # returns True if the tweet is inside the time chunk window
@@ -181,34 +181,34 @@ class TimeChunk(object):
     if self.is_duplicate(message):
       logger.info('duplicated tweet: {0} not processing!'.format(message.get_id()))
       return
-    #subchunk = self.get_first_subchunk(message)
-    self.current_subchunk.update(message)
+    #chunk = self.get_first_chunk(message)
+    self.current_chunk.update(message)
     self.changed_since_retrieval = True
 
-  def current_subchunk_isfull(self):
+  def current_chunk_isfull(self):
     return self.current_chunk.is_full()
 
-  def update_current_subchunk(self, id_in_db):
-    self.complete_subchunks.append(id_in_db)
-    self.current_subchunk = SubChunk(self.start_date)
+  def update_current_chunk(self, id_in_db):
+    self.complete_chunks.append(id_in_db)
+    self.current_chunk = Chunk(self.start_date)
 
   def is_duplicate(self, message):
     # membership test is O(1) on average in sets, this should be cheap
-    return any(subchunk.is_duplicate(message) for subchunk in self.complete_subchunks)
+    return any(chunk.is_duplicate(message) for chunk in self.complete_chunks)
 
-  def get_first_subchunk(self, message):
-    for subchunk in self.complete_subchunks:
-      if not subchunk.is_full():
-        return subchunk
-    new_chunk = SubChunk(self.start_date)
-    self.complete_subchunks.append(new_chunk)
+  def get_first_chunk(self, message):
+    for chunk in self.complete_chunks:
+      if not chunk.is_full():
+        return chunk
+    new_chunk = Chunk(self.start_date)
+    self.complete_chunks.append(new_chunk)
     return new_chunk
 
-  def reduce_subchunks(self):
-    return TimeChunkMgr().reduce_chunks([sc.default() for sc in self.complete_subchunks])
+  def reduce_chunks(self):
+    return ChunkMgr().reduce_chunks([sc.default() for sc in self.complete_chunks])
 
   def pretty(self):
-    results = self.reduce_subchunks()
+    results = self.reduce_chunks()
     results[3] = len(results[3])
     return 'Most used terms: {0} \n Most popular hashtags: {1} \n Users with more mentions: {2} \n Number of users writing tweets: {3} \n Tweets written: {4}'.format(*results)
 # tweets.update({'id_str': "368308360074240000"}, { '$set': {'text': 'u fagget'}})

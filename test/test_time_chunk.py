@@ -1,10 +1,10 @@
 from streamers.file_streamer import FileStreamer
 from messages.tweet import Tweet
 from db_test_base import MongoTest
-from db.injector import TimeChunkInjector, TweetInjector
+from db.injector import ChunkInjector, TweetInjector
 from db.injector_manager import InjectorManager
 from db.db_manager import DBManager
-from db.time_chunk import TimeChunk, TimeChunkMgr, SubChunk
+from db.chunk_container import ChunkContainer, ChunkMgr, Chunk
 from datetime import datetime
 import tweet_samples
 import ujson as json
@@ -13,7 +13,7 @@ import unittest
 
 class TestChunkInjector(MongoTest):
   def setUp(self):
-    self.tci = TimeChunkInjector(DBManager(self.conn, 'stats', 'time_chunks', index='start_date'))
+    self.tci = ChunkInjector(DBManager(self.conn, 'stats', 'chunk_containers', index='start_date'))
     super(TestChunkInjector, self).setUp()
 
   def load_fixture(self):
@@ -24,7 +24,7 @@ class TestChunkInjector(MongoTest):
 
 chunk_dict1 = {'size': 1,
                'start_date': 1376646480,
-               'complete_subchunks': [{
+               'complete_chunks': [{
                  'terms': {'term1': 1, 'term2': 2},
                  'hashtags': {'one': 3, 'two': 5},
                  'users': ['user1'],
@@ -34,7 +34,7 @@ chunk_dict1 = {'size': 1,
 
 chunk_dict2 = {'size': 1,
                'start_date': 1376646540,
-               'complete_subchunks': [{
+               'complete_chunks': [{
                  'terms': {'term1': 10},
                  'hashtags': {'one': 2, 'three': 3},
                  'users': ['user3', 'user5', 'user9001'],
@@ -44,7 +44,7 @@ chunk_dict2 = {'size': 1,
 
 chunk_dict3 = {'size': 1,
                'start_date': 1376646600,
-               'complete_subchunks': [{
+               'complete_chunks': [{
                  'terms': {'term1': 50, 'term2': 2, 'term10': 1},
                  'hashtags': {},
                  'users': ['user7'],
@@ -53,20 +53,20 @@ chunk_dict3 = {'size': 1,
               }]}
 
 
-class TestTimeChunkMgr(unittest.TestCase):
+class TestChunkMgr(unittest.TestCase):
   def setUp(self):
-    self.mgr = TimeChunkMgr()
+    self.mgr = ChunkMgr()
 
   def test_load_chunk(self):
     c = self.mgr.load_chunk(chunk_dict1)
-    self.assertEquals(type(c), TimeChunk)
+    self.assertEquals(type(c), ChunkContainer)
     self.assertEquals(c.size, 1)
     self.assertEquals(c.start_date, datetime(2013, 8, 16, 9, 48))
-    self.assertEquals(c.complete_subchunks[0].terms, {'term1': 1, 'term2': 2})
-    self.assertEquals(c.complete_subchunks[0].hashtags, {'one': 3, 'two': 5})
-    self.assertEquals(c.complete_subchunks[0].users, set(['user1']))
-    self.assertEquals(c.complete_subchunks[0].tweet_ids, set([1, 2, 3, 4]))
-    self.assertEquals(c.complete_subchunks[0].user_mentions, {})
+    self.assertEquals(c.complete_chunks[0].terms, {'term1': 1, 'term2': 2})
+    self.assertEquals(c.complete_chunks[0].hashtags, {'one': 3, 'two': 5})
+    self.assertEquals(c.complete_chunks[0].users, set(['user1']))
+    self.assertEquals(c.complete_chunks[0].tweet_ids, set([1, 2, 3, 4]))
+    self.assertEquals(c.complete_chunks[0].user_mentions, {})
 
   def test_reduce_chunks(self):
     l = [chunk_dict1, chunk_dict2, chunk_dict3]
