@@ -12,10 +12,13 @@ SUBCHUNK_SIZE = 100
 
 
 class ChunkMgr(object):
-  def load_chunk(self, chunk_dict):
-    return ChunkContainer(chunk_dict.pop('size'),
-                     self.get_date_from_db_key(chunk_dict.pop('start_date')),
-                     **chunk_dict)
+  def load_chunk_container(self, container_dict):
+    return ChunkContainer(container_dict.pop('size'),
+                     self.get_date_from_db_key(container_dict.pop('start_date')),
+                     **container_dict)
+
+  def load_chunk(self, parent_container, chunk_dict):
+    return Chunk(parent_container, **chunk_dict)
 
   def get_top_occurrences(self, chunk_list, number_of_occurrences):
     ''' returns the top number_of_occurrences out of chunk_list for each
@@ -25,32 +28,32 @@ class ChunkMgr(object):
     results = {}
     for occurrence_key in occurrence_keys:
       dicts = [sc[occurrence_key] for sc in chunk_list]
-      results[occurrence_key] = get_top_occurences(number_of_occurrences,
+      results[occurrence_key] = get_top_occurrences(number_of_occurrences,
                                                    dicts,
                                                    [sorted_list_from_dict(d) for d in dicts])
     return results
 
-  def reduce_chunks(self, chunk_iterable, postprocess=False):
-    ''' reduces an iterable of chunks to a single chunk, merging their contents.
-        Each chunk included in the iterable is expected to be a dictionary
-    '''
-    terms = defaultdict(int)
-    user_mentions = defaultdict(int)
-    hashtags = defaultdict(int)
-    users = set()
-    tweet_ids = set()
-    for chunk_dict in chunk_iterable:
-      update_dict(terms, chunk_dict['terms'])
-      update_dict(hashtags, chunk_dict['hashtags'])
-      update_dict(user_mentions, chunk_dict['user_mentions'])
-      update_set(users, chunk_dict['users'])
-      update_set(tweet_ids, chunk_dict['tweet_ids'])
-    if postprocess:
-      terms, user_mentions, hashtags, users, tweet_ids = \
-                         self.postprocess_chunks(terms, user_mentions, hashtags, users, tweet_ids)
-    keys = CHUNK_DATA
-    values = (terms, user_mentions, hashtags, users, tweet_ids)
-    return dict(zip(keys, values))
+#  def reduce_chunks(self, chunk_iterable, postprocess=False):
+#    ''' reduces an iterable of chunks to a single chunk, merging their contents.
+#        Each chunk included in the iterable is expected to be a dictionary
+#    '''
+#    terms = defaultdict(int)
+#    user_mentions = defaultdict(int)
+#    hashtags = defaultdict(int)
+#    users = set()
+#    tweet_ids = set()
+#    for chunk_dict in chunk_iterable:
+#      update_dict(terms, chunk_dict['terms'])
+#      update_dict(hashtags, chunk_dict['hashtags'])
+#      update_dict(user_mentions, chunk_dict['user_mentions'])
+#      update_set(users, chunk_dict['users'])
+#      update_set(tweet_ids, chunk_dict['tweet_ids'])
+#    if postprocess:
+#      terms, user_mentions, hashtags, users, tweet_ids = \
+#                         self.postprocess_chunks(terms, user_mentions, hashtags, users, tweet_ids)
+#    keys = CHUNK_DATA
+#    values = (terms, user_mentions, hashtags, users, tweet_ids)
+#    return dict(zip(keys, values))
 
   def postprocess_chunks(self, terms, user_mentions, hashtags, users, tweet_ids):
     def get_sorted(iterable, trim=0):
@@ -77,39 +80,12 @@ class ChunkMgr(object):
     return convert_date(date)
 
   def get_date_from_db_key(self, key):
-    return datetime.utcfromtimestamp(start_date)
+    return datetime.utcfromtimestamp(key)
 
-
-class FullChunk(Chunk):
-  ''' when a chunk is full fast lookup to perform updates quickly stop being important
-      Instead, we need to keep records sorted to be able to do the mergesort algorithm
-      as fast as possible.
-  '''
-  def __init__(self, parent_chunk, **kwargs):
-    self.parent_chunk = parent_chunk
-    self.tweet_ids = set(kwargs.get('tweet_ids', set()))
-    assert self.is_full(), "chunk is not full {0}".format(len(self.tweet_ids))
-    self.users = set(kwargs.get('users', set()))
-    self.changed_since_retrieval = False
-    self.terms = kwargs.get('terms', [])
-    self.user_mentions = kwargs.get('user_mentions', [])
-    self.hashtags = kwargs.get('hashtags', [])
-
-  def update(self, message):
-    raise Exception("Full chunk cannot be updated")
-
-  def default(self):
-    keys = CHUNK_DATA
-    values = ((t.default() for t in self.terms),
-             (t.default() for t in self.user_mentions),
-             (t.default() for t in self.hashtags),
-             list(self.users),
-             list(self.tweet_ids))
-    return dict(zip(keys, values))
 
 class Chunk(object):
-  def __init__(self, parent_chunk, **kwargs):
-    self.parent_chunk = parent_chunk
+  def __init__(self, parent_container, **kwargs):
+    self.parent_container = parent_container
     self.obj_id = kwargs.get('obj_id', None)
     # when retrieved from kwargs we're not sure they are defaultdict
     self.tweet_ids = set(kwargs.get('tweet_ids', set()))
@@ -124,7 +100,8 @@ class Chunk(object):
 
   def default(self):
     keys = CHUNK_DATA
-    values = (self.terms, self.user_mentions, self.hashtags, list(self.users), list(self.tweet_ids))
+    values = (self.parent_container, self.terms, self.user_mentions,
+              self.hashtags, list(self.users), list(self.tweet_ids))
     return dict(zip(keys, values))
 
   def update(self, message):
@@ -146,16 +123,34 @@ class Chunk(object):
       attr[key] += new_dict[key]
 
 
+class SortedChunk(Chunk):
+  ''' when a chunk is full fast lookup to perform updates quickly stop being important
+      Instead, we need to keep records sorted to be able to do the mergesort algorithm
+      as fast as possible.
+  '''
+  def __init__(self, parent_container, **kwargs):
+    self.parent_container = parent_container
+    self.tweet_ids = set(kwargs.get('tweet_ids', set()))
+    assert self.is_full(), "chunk is not full {0}".format(len(self.tweet_ids))
+    self.users = set(kwargs.get('users', set()))
+    self.changed_since_retrieval = False
+    self.terms = kwargs.get('terms', [])
+    self.user_mentions = kwargs.get('user_mentions', [])
+    self.hashtags = kwargs.get('hashtags', [])
+
+  def update(self, message):
+    raise Exception("Full chunk cannot be updated")
+
+
 class ChunkContainer(object):
   def __init__(self, size, start_date, **kwargs):
-    # size of chunk in minutes
+    # size of container in minutes
     assert not 60 % size, "60 must be divisible by ChunkContainer size"
     self.size = size
     self.start_date = start_date
-    self.complete_chunks = []
-    chunks = kwargs.get('complete_chunks', [])
-    for chunk in chunks:
-      self.complete_chunks.append(Chunk(self.start_date, **chunk))
+    self.chunks = []
+    chunks = kwargs.get('chunks', [])
+    self.current_chunk = kwargs.get('current_chunk')
     self.changed_since_retrieval = False
 
   def get_db_key(self):
@@ -167,7 +162,7 @@ class ChunkContainer(object):
     return {'size': self.size,
             'start_date': self.get_db_key(),
             'chunk_size': SUBCHUNK_SIZE,
-            'complete_chunks': [sb.default() for sb in self.complete_chunks]}
+            'chunks': [c.default() for c in self.chunks]}
 
   def tweet_fits(self, tweet):
     # returns True if the tweet is inside the time chunk window
@@ -189,23 +184,23 @@ class ChunkContainer(object):
     return self.current_chunk.is_full()
 
   def update_current_chunk(self, id_in_db):
-    self.complete_chunks.append(id_in_db)
+    self.chunks.append(id_in_db)
     self.current_chunk = Chunk(self.start_date)
 
   def is_duplicate(self, message):
     # membership test is O(1) on average in sets, this should be cheap
-    return any(chunk.is_duplicate(message) for chunk in self.complete_chunks)
+    return any(chunk.is_duplicate(message) for chunk in self.chunks)
 
   def get_first_chunk(self, message):
-    for chunk in self.complete_chunks:
+    for chunk in self.chunks:
       if not chunk.is_full():
         return chunk
     new_chunk = Chunk(self.start_date)
-    self.complete_chunks.append(new_chunk)
+    self.chunks.append(new_chunk)
     return new_chunk
 
   def reduce_chunks(self):
-    return ChunkMgr().reduce_chunks([sc.default() for sc in self.complete_chunks])
+    return ChunkMgr().reduce_chunks([sc.default() for sc in self.chunks])
 
   def pretty(self):
     results = self.reduce_chunks()

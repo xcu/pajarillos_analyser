@@ -4,7 +4,7 @@ from db_test_base import MongoTest
 from db.injector import ChunkInjector, TweetInjector
 from db.injector_manager import InjectorManager
 from db.db_manager import DBManager
-from db.chunk_container import ChunkContainer
+from db.chunk import ChunkContainer
 from datetime import datetime
 import tweet_samples
 import ujson as json
@@ -45,10 +45,10 @@ class TestChunkInjector(MongoTest):
   def test_get_chunk_from_date(self):
     # first one that exists:
     c = self.tci.get_chunk_from_date(datetime.utcfromtimestamp(1376646540))
-    self.assertEquals(c.complete_chunks[0].tweet_ids, set([u'368308364012691456']))
+    self.assertEquals(c.chunks[0].tweet_ids, set([u'368308364012691456']))
     # now a random one
     c = self.tci.get_chunk_from_date(datetime.utcfromtimestamp(1076646540))
-    self.assertEquals(c.complete_chunks, [])
+    self.assertEquals(c.chunks, [])
 
   def test_chunk_exists(self):
     self.assertTrue(self.tci.chunk_exists(datetime.utcfromtimestamp(1376646540)))
@@ -56,12 +56,12 @@ class TestChunkInjector(MongoTest):
 
   def test_save_chunk(self):
     c = self.tci.get_chunk_from_date(datetime.utcfromtimestamp(1376646540))
-    self.assertEquals(len(c.complete_chunks), 1)
-    c.complete_chunks = []
+    self.assertEquals(len(c.chunks), 1)
+    c.chunks = []
     self.tci.save_chunk(c)
     # pick it again and check it changed
     c = self.tci.get_chunk_from_date(datetime.utcfromtimestamp(1376646540))
-    self.assertEquals(len(c.complete_chunks), 0)
+    self.assertEquals(len(c.chunks), 0)
 
 
 # BELONGS TO DB MGR!!

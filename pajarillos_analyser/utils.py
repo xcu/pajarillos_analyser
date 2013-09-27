@@ -10,7 +10,7 @@ logger = logging.getLogger('utils')
 
 
 
-CHUNK_DATA = ('terms', 'user_mentions', 'hashtags', 'users', 'tweet_ids')
+CHUNK_DATA = ('parent_container', 'terms', 'user_mentions', 'hashtags', 'users', 'tweet_ids')
 
 def convert_date(date):
   '''
