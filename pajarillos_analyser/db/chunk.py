@@ -1,6 +1,6 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
-from utils import get_top_occurrences, sorted_list_from_dict, \
+from utils import get_top_occurrences, sorted_list_from_dict,\
                   convert_date, update_dict, update_set, CHUNK_DATA
 import logging
 logging.basicConfig(filename='tweets.log',
@@ -12,6 +12,9 @@ SUBCHUNK_SIZE = 100
 
 
 class ChunkMgr(object):
+  def load_empty_chunk_container(self, size, sdate):
+    return self.load_chunk_container({'size': size, 'start_date': sdate})
+
   def load_chunk_container(self, container_dict):
     return ChunkContainer(container_dict.pop('size'),
                      self.get_date_from_db_key(container_dict.pop('start_date')),
@@ -24,13 +27,14 @@ class ChunkMgr(object):
     ''' returns the top number_of_occurrences out of chunk_list for each
         dictionary in the chunk -namely, the terms, the hashtags and the user mentions
     '''
-    occurrence_keys = ('terms', 'user_mentions', 'hashtags')
+    occurrence_keys = (('terms', 'sorted_terms'),
+                       ('user_mentions', 'sorted_user_mentions'),
+                       ('hashtags', 'sorted_hashtags'))
     results = {}
-    for occurrence_key in occurrence_keys:
-      dicts = [sc[occurrence_key] for sc in chunk_list]
-      results[occurrence_key] = get_top_occurrences(number_of_occurrences,
-                                                   dicts,
-                                                   [sorted_list_from_dict(d) for d in dicts])
+    for dict_key, list_key in occurrence_keys:
+      dicts = [sc[dict_key] for sc in chunk_list]
+      lists = [sc[list_key] for sc in chunk_list]
+      results[occurrence_key] = get_top_occurrences(number_of_occurrences, dicts, lists])
     return results
 
 #  def reduce_chunks(self, chunk_iterable, postprocess=False):
@@ -92,16 +96,33 @@ class Chunk(object):
     self.users = set(kwargs.get('users', set()))
     self.changed_since_retrieval = False
     self.terms = defaultdict(int, kwargs.get('terms', defaultdict(int)))
+    self.sorted_terms = kwargs.get('sorted_terms', [])
     self.user_mentions = defaultdict(int, kwargs.get('user_mentions', defaultdict(int)))
+    self.sorted_user_mentions = kwargs.get('sorted_user_mentions', [])
     self.hashtags = defaultdict(int, kwargs.get('hashtags', defaultdict(int)))
+    self.sorted_hashtags = kwargs.get('sorted_hashtags', [])
 
   def is_full(self):
     return len(self.tweet_ids) >= SUBCHUNK_SIZE
 
+  def sorted_dicts(self, force=False):
+    # if needed, creates a sorted list out of the dictionaries
+    def need_to_recalculate():
+      return force or any(not d for d in (self.sorted_terms,
+                                          self.sorted_user_mentions,
+                                          self.sorted_hashtags))
+    if need_to_recalculate():
+      self.sorted_terms = sorted_list_from_dict(self.terms)
+      self.sorted_user_mentions = sorted_list_from_dict(self.user_mentions)
+      self.sorted_hashtags = sorted_list_from_dict(self.hashtags)
+    return self.sorted_terms, self.sorted_user_mentions, self.sorted_hashtags
+
   def default(self):
+    self.sorted_dicts()
     keys = CHUNK_DATA
-    values = (self.parent_container, self.terms, self.user_mentions,
-              self.hashtags, list(self.users), list(self.tweet_ids))
+    values = (self.parent_container, self.terms, self.sorted_terms,
+              self.user_mentions, self.sorted_user_mentions,
+              self.hashtags, self.sorted_hashtags, list(self.users), list(self.tweet_ids))
     return dict(zip(keys, values))
 
   def update(self, message):
@@ -123,46 +144,28 @@ class Chunk(object):
       attr[key] += new_dict[key]
 
 
-class SortedChunk(Chunk):
-  ''' when a chunk is full fast lookup to perform updates quickly stop being important
-      Instead, we need to keep records sorted to be able to do the mergesort algorithm
-      as fast as possible.
-  '''
-  def __init__(self, parent_container, **kwargs):
-    self.parent_container = parent_container
-    self.tweet_ids = set(kwargs.get('tweet_ids', set()))
-    assert self.is_full(), "chunk is not full {0}".format(len(self.tweet_ids))
-    self.users = set(kwargs.get('users', set()))
-    self.changed_since_retrieval = False
-    self.terms = kwargs.get('terms', [])
-    self.user_mentions = kwargs.get('user_mentions', [])
-    self.hashtags = kwargs.get('hashtags', [])
-
-  def update(self, message):
-    raise Exception("Full chunk cannot be updated")
-
-
 class ChunkContainer(object):
   def __init__(self, size, start_date, **kwargs):
     # size of container in minutes
     assert not 60 % size, "60 must be divisible by ChunkContainer size"
     self.size = size
     self.start_date = start_date
-    self.chunks = []
-    chunks = kwargs.get('chunks', [])
-    self.current_chunk = kwargs.get('current_chunk')
+    # key: ObjectId, val: Chunk obj
+    self.chunks = {}
+    chunks = kwargs.get('chunks', {})
+    self.current_chunk = kwargs.get('current_chunk', ())
     self.changed_since_retrieval = False
 
   def get_db_key(self):
     return ChunkMgr().get_date_db_key(self.start_date)
 
   def default(self):
-    # json.loads(aJsonString, object_hook=json_util.object_hook)
-    # json.dumps(self.start_date, default=json_util.default)
+    # DB only cares about the chunk index
     return {'size': self.size,
             'start_date': self.get_db_key(),
             'chunk_size': SUBCHUNK_SIZE,
-            'chunks': [c.default() for c in self.chunks]}
+            'chunks': self.chunks.keys(),
+            'current_chunk': self.current_chunk[0] if self.current_chunk else None}
 
   def tweet_fits(self, tweet):
     # returns True if the tweet is inside the time chunk window
@@ -172,32 +175,29 @@ class ChunkContainer(object):
     delta = timedelta(minutes=creation_time.minute % self.size)
     return reset_seconds(creation_time - delta) == self.start_date
 
+  def update_current_chunk(self, message):
+    # updates current chunk values with the new message
+    current_chunk_obj = self.current_chunk[1]
+    current_chunk_obj.update(message)
+
   def update(self, message):
     if self.is_duplicate(message):
       logger.info('duplicated tweet: {0} not processing!'.format(message.get_id()))
       return
-    #chunk = self.get_first_chunk(message)
-    self.current_chunk.update(message)
+    self.update_current_chunk(message)
     self.changed_since_retrieval = True
 
   def current_chunk_isfull(self):
     return self.current_chunk.is_full()
 
-  def update_current_chunk(self, id_in_db):
-    self.chunks.append(id_in_db)
-    self.current_chunk = Chunk(self.start_date)
+  def store_current_chunk(self, id_in_db):
+    # puts current_chunk in the chunks list and creates a new one
+    self.chunks[id_in_db] = self.current_chunk
+    self.current_chunk = ChunkMgr().load_chunk(self.start_date, {})
 
   def is_duplicate(self, message):
     # membership test is O(1) on average in sets, this should be cheap
     return any(chunk.is_duplicate(message) for chunk in self.chunks)
-
-  def get_first_chunk(self, message):
-    for chunk in self.chunks:
-      if not chunk.is_full():
-        return chunk
-    new_chunk = Chunk(self.start_date)
-    self.chunks.append(new_chunk)
-    return new_chunk
 
   def reduce_chunks(self):
     return ChunkMgr().reduce_chunks([sc.default() for sc in self.chunks])

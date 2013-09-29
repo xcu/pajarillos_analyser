@@ -40,7 +40,9 @@ class DBManager(object):
     # returns a ChunkContainer object out from the provided dictionary
     container = self.chunk_mgr.load_chunk_container(container_dict)
     current_chunk = container_dict.get('current_chunk', {})
-    container.current_chunk = self.load_chunk(current_chunk)
+    container.current_chunk = {current_chunk: self.load_chunk(current_chunk)}
+    chunks = container_dict.get('chunks', [])
+    container.chunks = dict((chunk_id, self.load_chunk(chunk_id)) for chunk_id in chunks}
     return container
 
   def load_chunk_from_id(self, chunk_id):
