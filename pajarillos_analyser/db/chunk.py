@@ -8,7 +8,7 @@ logging.basicConfig(filename='tweets.log',
                     format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger('chunk_container')
 
-SUBCHUNK_SIZE = 100
+CHUNK_SIZE = 100
 
 
 class ChunkMgr(object):
@@ -34,30 +34,8 @@ class ChunkMgr(object):
     for dict_key, list_key in occurrence_keys:
       dicts = [sc[dict_key] for sc in chunk_list]
       lists = [sc[list_key] for sc in chunk_list]
-      results[occurrence_key] = get_top_occurrences(number_of_occurrences, dicts, lists])
+      results[dict_key] = get_top_occurrences(number_of_occurrences, dicts, lists)
     return results
-
-#  def reduce_chunks(self, chunk_iterable, postprocess=False):
-#    ''' reduces an iterable of chunks to a single chunk, merging their contents.
-#        Each chunk included in the iterable is expected to be a dictionary
-#    '''
-#    terms = defaultdict(int)
-#    user_mentions = defaultdict(int)
-#    hashtags = defaultdict(int)
-#    users = set()
-#    tweet_ids = set()
-#    for chunk_dict in chunk_iterable:
-#      update_dict(terms, chunk_dict['terms'])
-#      update_dict(hashtags, chunk_dict['hashtags'])
-#      update_dict(user_mentions, chunk_dict['user_mentions'])
-#      update_set(users, chunk_dict['users'])
-#      update_set(tweet_ids, chunk_dict['tweet_ids'])
-#    if postprocess:
-#      terms, user_mentions, hashtags, users, tweet_ids = \
-#                         self.postprocess_chunks(terms, user_mentions, hashtags, users, tweet_ids)
-#    keys = CHUNK_DATA
-#    values = (terms, user_mentions, hashtags, users, tweet_ids)
-#    return dict(zip(keys, values))
 
   def postprocess_chunks(self, terms, user_mentions, hashtags, users, tweet_ids):
     def get_sorted(iterable, trim=0):
@@ -86,6 +64,28 @@ class ChunkMgr(object):
   def get_date_from_db_key(self, key):
     return datetime.utcfromtimestamp(key)
 
+#  def reduce_chunks(self, chunk_iterable, postprocess=False):
+#    ''' reduces an iterable of chunks to a single chunk, merging their contents.
+#        Each chunk included in the iterable is expected to be a dictionary
+#    '''
+#    terms = defaultdict(int)
+#    user_mentions = defaultdict(int)
+#    hashtags = defaultdict(int)
+#    users = set()
+#    tweet_ids = set()
+#    for chunk_dict in chunk_iterable:
+#      update_dict(terms, chunk_dict['terms'])
+#      update_dict(hashtags, chunk_dict['hashtags'])
+#      update_dict(user_mentions, chunk_dict['user_mentions'])
+#      update_set(users, chunk_dict['users'])
+#      update_set(tweet_ids, chunk_dict['tweet_ids'])
+#    if postprocess:
+#      terms, user_mentions, hashtags, users, tweet_ids = \
+#                         self.postprocess_chunks(terms, user_mentions, hashtags, users, tweet_ids)
+#    keys = CHUNK_DATA
+#    values = (terms, user_mentions, hashtags, users, tweet_ids)
+#    return dict(zip(keys, values))
+
 
 class Chunk(object):
   def __init__(self, parent_container, **kwargs):
@@ -103,14 +103,14 @@ class Chunk(object):
     self.sorted_hashtags = kwargs.get('sorted_hashtags', [])
 
   def is_full(self):
-    return len(self.tweet_ids) >= SUBCHUNK_SIZE
+    return len(self.tweet_ids) >= CHUNK_SIZE
 
-  def sorted_dicts(self, force=False):
+  def sorted_dicts(self):
     # if needed, creates a sorted list out of the dictionaries
     def need_to_recalculate():
-      return force or any(not d for d in (self.sorted_terms,
-                                          self.sorted_user_mentions,
-                                          self.sorted_hashtags))
+      return self.changed_since_retrieval or any(not d for d in (self.sorted_terms,
+                                                                 self.sorted_user_mentions,
+                                                                 self.sorted_hashtags))
     if need_to_recalculate():
       self.sorted_terms = sorted_list_from_dict(self.terms)
       self.sorted_user_mentions = sorted_list_from_dict(self.user_mentions)
@@ -118,6 +118,7 @@ class Chunk(object):
     return self.sorted_terms, self.sorted_user_mentions, self.sorted_hashtags
 
   def default(self):
+    # this class needs a change_since_retrieval instead of force
     self.sorted_dicts()
     keys = CHUNK_DATA
     values = (self.parent_container, self.terms, self.sorted_terms,
@@ -131,6 +132,7 @@ class Chunk(object):
     self._update_list_generic(message.get_user_mentions(), self.user_mentions)
     self._update_list_generic(message.get_hashtags(), self.hashtags)
     self.users.add(message.get_user())
+    self.changed_since_retrieval = True
 
   def is_duplicate(self, message):
     return message.get_id() in self.tweet_ids
@@ -151,8 +153,7 @@ class ChunkContainer(object):
     self.size = size
     self.start_date = start_date
     # key: ObjectId, val: Chunk obj
-    self.chunks = {}
-    chunks = kwargs.get('chunks', {})
+    self.chunks = kwargs.get('chunks', {})
     self.current_chunk = kwargs.get('current_chunk', ())
     self.changed_since_retrieval = False
 
@@ -163,7 +164,7 @@ class ChunkContainer(object):
     # DB only cares about the chunk index
     return {'size': self.size,
             'start_date': self.get_db_key(),
-            'chunk_size': SUBCHUNK_SIZE,
+            'chunk_size': CHUNK_SIZE,
             'chunks': self.chunks.keys(),
             'current_chunk': self.current_chunk[0] if self.current_chunk else None}
 

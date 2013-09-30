@@ -8,7 +8,7 @@ logging.basicConfig(filename='tweets.log',
 logger = logging.getLogger('db_injector')
 
 
-TIMECHUNK_SIZE = 1
+CONTAINER_SIZE = 1
 
 
 class Injector(object):
@@ -32,7 +32,7 @@ class ChunkInjector(Injector):
   def to_db(self, message, current_chunk_container):
     ''' updates current_chunk_container with message and stores the chunk in the db if necessary '''
     def pick_container_from_msg_date():
-      message_date = message.get_associated_container(TIMECHUNK_SIZE)
+      message_date = message.get_associated_container(CONTAINER_SIZE)
       return self.get_chunk_container_from_date(message_date)
 
     if not current_chunk_container:
@@ -65,7 +65,7 @@ class ChunkInjector(Injector):
     '''
     logger.info("trying to get chunk from date {0}".format(start))
     if not self.chunk_exists(start):
-      return self.chunkmgr.load_empty_chunk_container(TIMECHUNK_SIZE, start)
+      return self.chunkmgr.load_empty_chunk_container(CONTAINER_SIZE, start)
     return self.dbmgr.load_container_from_date(start)
 
   def chunk_exists(self, start_time):
@@ -83,8 +83,8 @@ class ChunkInjector(Injector):
       if container.current_chunk:
         chunk_id, chunk_obj = container.current_chunk
         if chunk_id:
-          self.dbmgr.update_doc({'_id': chunk_id}, chunk.default())
+          self.dbmgr.update_doc({'_id': chunk_id}, chunk_obj.default())
         else:
           container.current_chunk[0] = self.dbmgr.save_chunk(chunk_obj)
-      self.dbmgr.upsert_chunk(container.default())
+      self.dbmgr.upsert_container(container.default())
 
