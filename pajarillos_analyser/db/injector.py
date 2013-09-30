@@ -30,7 +30,7 @@ class TweetInjector(Injector):
 
 class ChunkInjector(Injector):
   def to_db(self, message, current_chunk_container):
-    ''' updates current_chunk_container with message and stores the chunk in the db if necessary '''
+    ''' updates current_chunk_container with message and stores the chunk in the db if necessary'''
     def pick_container_from_msg_date():
       message_date = message.get_associated_container(CONTAINER_SIZE)
       return self.get_chunk_container_from_date(message_date)
@@ -52,7 +52,7 @@ class ChunkInjector(Injector):
 
   def store_current_chunk_in_db(self, container):
     # put it in db, get its id and with it update the container object
-    id_ref = self.dbmgr.save_chunk(container.current_chunk)
+    id_ref = self.dbmgr.save_chunk(container.current_chunk[1])
     container.store_current_chunk(id_ref)
 
   def last_to_db(self, current_chunk_container):
@@ -85,6 +85,6 @@ class ChunkInjector(Injector):
         if chunk_id:
           self.dbmgr.update_doc({'_id': chunk_id}, chunk_obj.default())
         else:
-          container.current_chunk[0] = self.dbmgr.save_chunk(chunk_obj)
+          container.current_chunk = (self.dbmgr.save_chunk(chunk_obj), container.current_chunk)
       self.dbmgr.upsert_container(container.default())
 

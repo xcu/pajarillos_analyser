@@ -16,9 +16,10 @@ class ChunkMgr(object):
     return self.load_chunk_container({'size': size, 'start_date': sdate})
 
   def load_chunk_container(self, container_dict):
+    # here start_date is expected to be a datetime object
     return ChunkContainer(container_dict.pop('size'),
-                     self.get_date_from_db_key(container_dict.pop('start_date')),
-                     **container_dict)
+                          container_dict.pop('start_date'),
+                          **container_dict)
 
   def load_chunk(self, parent_container, chunk_dict):
     return Chunk(parent_container, **chunk_dict)
@@ -117,9 +118,15 @@ class Chunk(object):
       self.sorted_hashtags = sorted_list_from_dict(self.hashtags)
     return self.sorted_terms, self.sorted_user_mentions, self.sorted_hashtags
 
+  def make_sorted_lists_serializable(self):
+    #the output of sorted_dicts has some sets that need to be transformed into something different
+    for attr in ('sorted_terms', 'sorted_user_mentions', 'sorted_hashtags'):
+        setattr(self, attr, [(num, list(occ)) for num, occ in getattr(self, attr)])
+
   def default(self):
     # this class needs a change_since_retrieval instead of force
     self.sorted_dicts()
+    self.make_sorted_lists_serializable()
     keys = CHUNK_DATA
     values = (self.parent_container, self.terms, self.sorted_terms,
               self.user_mentions, self.sorted_user_mentions,
@@ -154,7 +161,7 @@ class ChunkContainer(object):
     self.start_date = start_date
     # key: ObjectId, val: Chunk obj
     self.chunks = kwargs.get('chunks', {})
-    self.current_chunk = kwargs.get('current_chunk', ())
+    self.current_chunk = kwargs.get('current_chunk', (None, self.get_new_current_chunk()))
     self.changed_since_retrieval = False
 
   def get_db_key(self):
@@ -189,16 +196,19 @@ class ChunkContainer(object):
     self.changed_since_retrieval = True
 
   def current_chunk_isfull(self):
-    return self.current_chunk.is_full()
+    return self.current_chunk[1].is_full()
 
   def store_current_chunk(self, id_in_db):
     # puts current_chunk in the chunks list and creates a new one
-    self.chunks[id_in_db] = self.current_chunk
-    self.current_chunk = ChunkMgr().load_chunk(self.start_date, {})
+    self.chunks[id_in_db] = self.current_chunk[1]
+    self.current_chunk = (None, self.get_new_current_chunk())
+
+  def get_new_current_chunk(self):
+    return ChunkMgr().load_chunk(self.start_date, {})
 
   def is_duplicate(self, message):
     # membership test is O(1) on average in sets, this should be cheap
-    return any(chunk.is_duplicate(message) for chunk in self.chunks)
+    return any(chunk.is_duplicate(message) for _, chunk in self.chunks.iteritems())
 
   def reduce_chunks(self):
     return ChunkMgr().reduce_chunks([sc.default() for sc in self.chunks])

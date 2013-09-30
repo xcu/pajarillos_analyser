@@ -37,6 +37,9 @@ class DBManager(object):
 
   def load_chunk_container(self, container_dict):
     # returns a ChunkContainer object out from the provided dictionary
+    # here start_date is expected to be the key in the db
+    container_dict['start_date'] = \
+                self.chunk_mgr.get_date_from_db_key(container_dict['start_date'])
     container = self.chunk_mgr.load_chunk_container(container_dict)
     current_chunk = container_dict.get('current_chunk', {})
     container.current_chunk = {current_chunk: self.load_chunk(current_chunk)}
@@ -77,9 +80,9 @@ class DBManager(object):
 
   def upsert_container(self, container_dict):
     # probably chunk.default should return the datetime and not the posix seconds
-    msg = "updating db with key {0}. Chunk containing chunks with size: {1}"
-    key = self.chunk_mgr.get_date_db_key(container_dict['start_date'])
-    chunks_size = ','.join([str(len(sc['tweet_ids'])) for sc in container_dict['chunks']])
+    msg = "updating db with key {0}. Chunk containing {1} chunks"
+    key = container_dict['start_date']
+    chunks_size = len(container_dict['chunks'])
     logger.info(msg.format(key, chunks_size))
     self.update_doc({'start_date': container_dict['start_date']}, container_dict)
 
