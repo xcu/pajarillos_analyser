@@ -45,8 +45,8 @@ class HTTPStreamer(Streamer):
     #response = twitterreq(url, "POST", parameters)
     url = "https://stream.twitter.com/1.1/statuses/filter.json?"
     #parameters = {'language': 'en'}
-    parameters = {'track': 'mourinho,ronaldo', 'language': 'es'}
-    #parameters = {'locations': '-9.472656,36.160774,4.809570,43.153753'}
+    #parameters = {'track': 'mourinho,ronaldo', 'language': 'es'}
+    parameters = {'locations': '-9.472656,36.160774,4.809570,43.153753'}
     response = self.twitter_request(url, "POST", parameters)
     for line in response:
       yield self.create_message(line.strip())

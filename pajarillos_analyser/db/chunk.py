@@ -33,8 +33,8 @@ class ChunkMgr(object):
                        ('hashtags', 'sorted_hashtags'))
     results = {}
     for dict_key, list_key in occurrence_keys:
-      dicts = [sc[dict_key] for sc in chunk_list]
-      lists = [sc[list_key] for sc in chunk_list]
+      dicts = [getattr(sc, dict_key) for sc in chunk_list]
+      lists = [getattr(sc, list_key) for sc in chunk_list]
       results[dict_key] = get_top_occurrences(number_of_occurrences, dicts, lists)
     return results
 
@@ -102,6 +102,7 @@ class Chunk(object):
     self.sorted_user_mentions = kwargs.get('sorted_user_mentions', [])
     self.hashtags = defaultdict(int, kwargs.get('hashtags', defaultdict(int)))
     self.sorted_hashtags = kwargs.get('sorted_hashtags', [])
+    self.deserialize_sorted_lists()
 
   def is_full(self):
     return len(self.tweet_ids) >= CHUNK_SIZE
@@ -118,15 +119,20 @@ class Chunk(object):
       self.sorted_hashtags = sorted_list_from_dict(self.hashtags)
     return self.sorted_terms, self.sorted_user_mentions, self.sorted_hashtags
 
-  def make_sorted_lists_serializable(self):
+  def serialize_sorted_lists(self):
     #the output of sorted_dicts has some sets that need to be transformed into something different
     for attr in ('sorted_terms', 'sorted_user_mentions', 'sorted_hashtags'):
         setattr(self, attr, [(num, list(occ)) for num, occ in getattr(self, attr)])
 
+  def deserialize_sorted_lists(self):
+    #the output of sorted_dicts has some sets that need to be transformed into something different
+    for attr in ('sorted_terms', 'sorted_user_mentions', 'sorted_hashtags'):
+        setattr(self, attr, [(num, set(occ)) for num, occ in getattr(self, attr)])
+
   def default(self):
     # this class needs a change_since_retrieval instead of force
     self.sorted_dicts()
-    self.make_sorted_lists_serializable()
+    self.serialize_sorted_lists()
     keys = CHUNK_DATA
     values = (self.parent_container, self.terms, self.sorted_terms,
               self.user_mentions, self.sorted_user_mentions,
@@ -152,6 +158,12 @@ class Chunk(object):
     for key in new_dict.iterkeys():
       attr[key] += new_dict[key]
 
+  def num_tweets(self):
+    return len(self.tweet_ids)
+
+  def num_users(self):
+    return len(self.users)
+
 
 class ChunkContainer(object):
   def __init__(self, size, start_date, **kwargs):
@@ -163,6 +175,12 @@ class ChunkContainer(object):
     self.chunks = kwargs.get('chunks', {})
     self.current_chunk = kwargs.get('current_chunk', (None, self.get_new_current_chunk()))
     self.changed_since_retrieval = False
+
+  def num_tweets(self):
+    return sum((c.num_tweets() for c in self.chunks))
+
+  def num_users(self):
+    return sum((c.num_users() for c in self.chunks))
 
   def get_db_key(self):
     return ChunkMgr().get_date_db_key(self.start_date)

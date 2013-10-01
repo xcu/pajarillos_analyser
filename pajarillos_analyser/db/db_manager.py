@@ -58,13 +58,13 @@ class DBManager(object):
     # that returns the db id out of the candidate and accepts another param
     # with the name of the id in the db
     logger.info("db manager get_chunk id is {0}".format(chunk_id))
-    res = self.db.get({'_id': chunk_id})
+    res = self.sc.get({'_id': chunk_id})
     if not res.count():
       return ''
     return res.next()
 
   def load_chunk(self, chunk_dict):
-    parent_container = chunk_dict.get('parent_container')
+    parent_container = chunk_dict.pop('parent_container')
     if not parent_container:
         raise Exception("no parent container found for chunk {0}".format(chunk_dict))
     return self.chunk_mgr.load_chunk(parent_container, chunk_dict)
@@ -75,7 +75,7 @@ class DBManager(object):
     # finally do sorting algorithm on those
     containers = self.db.get_chunk_range(self.chunk_mgr.get_date_db_key(sdate),
                                          self.chunk_mgr.get_date_db_key(edate))
-    chunk_ids = (container.subchunks for container in containers)
+    chunk_ids = (container.get('chunks', []) for container in containers)
     return itertools.chain(*chunk_ids)
 
   def upsert_container(self, container_dict):
