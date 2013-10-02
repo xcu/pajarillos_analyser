@@ -118,8 +118,7 @@ class DBChunkManager(object):
     ''' after fetching a container from the db and initializing the container
     object some of their fields need to be translated from DB representation
     (like ids in the DB) to actual information to be used by the object '''
-    container_dict['start_date'] = \
-                self.chunk_mgr.get_date_from_db_key(container_dict['start_date'])
+    container_obj.start_date = self.chunk_mgr.get_date_from_db_key(container_obj.start_date)
     current_chunk_id = container_obj.current_chunk[0]
     if current_chunk_id:
       container_obj.current_chunk = (current_chunk_id, self.load_chunk_from_id(current_chunk_id))
