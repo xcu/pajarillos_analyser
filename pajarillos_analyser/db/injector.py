@@ -35,6 +35,8 @@ class ChunkInjector(Injector):
       message_date = message.get_associated_container(CONTAINER_SIZE)
       return self.get_chunk_container_from_date(message_date)
 
+    if not message.can_be_processed():
+      return current_chunk_container
     if not current_chunk_container:
       current_chunk_container = pick_container_from_msg_date()
     if not current_chunk_container.tweet_fits(message):

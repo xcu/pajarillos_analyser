@@ -3,6 +3,9 @@ class Message(object):
   def __init__(self, value):
     self.message = value #DotDict(value)
 
+  def can_be_processed(self):
+    return False
+
   def _process(self):
     pass
 

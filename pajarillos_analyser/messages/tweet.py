@@ -7,6 +7,9 @@ import re
 
 
 class Tweet(Message):
+  def can_be_processed(self):
+    return True
+
   def get_text(self):
     return self.message.get('text', '')
 
