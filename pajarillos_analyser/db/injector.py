@@ -83,7 +83,7 @@ class ChunkInjector(Injector):
       if container.current_chunk:
         chunk_id, chunk_obj = container.current_chunk
         if chunk_id:
-          self.dbmgr.update_doc({'_id': chunk_id}, chunk_obj.default())
+          self.dbmgr.update_chunk(chunk_id, chunk_obj.default())
         else:
           container.current_chunk = (self.dbmgr.save_chunk(chunk_obj), container.current_chunk)
       self.dbmgr.upsert_container(container.default())

@@ -3,7 +3,7 @@ from messages.tweet import Tweet
 from db_test_base import MongoTest
 from db.injector import ChunkInjector, TweetInjector
 from db.injector_manager import InjectorManager
-from db.db_manager import DBManager
+from db.db_manager import DBManager, DBChunkManager
 from db.chunk import ChunkContainer
 from datetime import datetime
 import tweet_samples
@@ -12,7 +12,7 @@ import ujson as json
 
 class TestChunkInjector(MongoTest):
   def setUp(self):
-    self.tci = ChunkInjector(DBManager(self.conn, 'stats', 'chunk_containers', index='start_date'))
+    self.tci = ChunkInjector(DBChunkManager(self.conn, 'stats'))
     super(TestChunkInjector, self).setUp()
 
   def load_fixture(self):
@@ -90,7 +90,7 @@ class Test2Injectors(MongoTest):
   def load_fixture(self):
     streamer = FileStreamer('mock_db_data')
     ti = TweetInjector(DBManager(self.conn, 'raw', 'tweets', index='id'))
-    tci = ChunkInjector(DBManager(self.conn, 'stats', 'chunk_containers', index='start_date'))
+    tci = ChunkInjector(DBChunkManager(self.conn, 'stats'))
     im = InjectorManager(registered_injectors=(ti, tci))
     im.to_db(streamer)
 

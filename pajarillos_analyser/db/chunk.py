@@ -12,6 +12,10 @@ CHUNK_SIZE = 100
 
 
 class ChunkMgr(object):
+  '''
+  this class should be completely decoupled from the DB layer. All it provides for
+  that purpose are methods to get the db key for a container
+  '''
   def load_empty_chunk_container(self, size, sdate):
     return self.load_chunk_container({'size': size, 'start_date': sdate})
 
@@ -65,27 +69,11 @@ class ChunkMgr(object):
   def get_date_from_db_key(self, key):
     return datetime.utcfromtimestamp(key)
 
-#  def reduce_chunks(self, chunk_iterable, postprocess=False):
-#    ''' reduces an iterable of chunks to a single chunk, merging their contents.
-#        Each chunk included in the iterable is expected to be a dictionary
-#    '''
-#    terms = defaultdict(int)
-#    user_mentions = defaultdict(int)
-#    hashtags = defaultdict(int)
-#    users = set()
-#    tweet_ids = set()
-#    for chunk_dict in chunk_iterable:
-#      update_dict(terms, chunk_dict['terms'])
-#      update_dict(hashtags, chunk_dict['hashtags'])
-#      update_dict(user_mentions, chunk_dict['user_mentions'])
-#      update_set(users, chunk_dict['users'])
-#      update_set(tweet_ids, chunk_dict['tweet_ids'])
-#    if postprocess:
-#      terms, user_mentions, hashtags, users, tweet_ids = \
-#                         self.postprocess_chunks(terms, user_mentions, hashtags, users, tweet_ids)
-#    keys = CHUNK_DATA
-#    values = (terms, user_mentions, hashtags, users, tweet_ids)
-#    return dict(zip(keys, values))
+  def get_container_db_index_key(self):
+    return 'start_date'
+
+  def get_chunk_db_index_key(self):
+    return '_id'
 
 
 class Chunk(object):
@@ -125,12 +113,12 @@ class Chunk(object):
         setattr(self, attr, [(num, list(occ)) for num, occ in getattr(self, attr)])
 
   def deserialize_sorted_lists(self):
-    #the output of sorted_dicts has some sets that need to be transformed into something different
+    #convert back lists into sets
     for attr in ('sorted_terms', 'sorted_user_mentions', 'sorted_hashtags'):
         setattr(self, attr, [(num, set(occ)) for num, occ in getattr(self, attr)])
 
   def default(self):
-    # this class needs a change_since_retrieval instead of force
+    # json reprentation with the desired format to store the chunk in the DB
     self.sorted_dicts()
     self.serialize_sorted_lists()
     keys = CHUNK_DATA
@@ -140,6 +128,7 @@ class Chunk(object):
     return dict(zip(keys, values))
 
   def update(self, message):
+    # updates current chunk with the message passed
     self.tweet_ids.add(message.get_id())
     self._update_dict_generic(message.get_terms(), self.terms)
     self._update_list_generic(message.get_user_mentions(), self.user_mentions)
@@ -173,7 +162,12 @@ class ChunkContainer(object):
     self.start_date = start_date
     # key: ObjectId, val: Chunk obj
     self.chunks = kwargs.get('chunks', {})
-    self.current_chunk = kwargs.get('current_chunk', (None, self.get_new_current_chunk()))
+    # (id in db, no object fetched yet)
+    self.current_chunk = kwargs.get('current_chunk')
+    if self.current_chunk:
+      self.current_chunk = (self.current_chunk, None)
+    else:
+      self.current_chunk = (None, self.get_new_current_chunk())
     self.changed_since_retrieval = False
 
   def num_tweets(self):
@@ -194,24 +188,25 @@ class ChunkContainer(object):
             'current_chunk': self.current_chunk[0] if self.current_chunk else None}
 
   def tweet_fits(self, tweet):
-    # returns True if the tweet is inside the time chunk window
+    # returns True if the tweet is inside the container window
     def reset_seconds(date):
       return datetime(date.year, date.month, date.day, date.hour, date.minute)
     creation_time = tweet.get_creation_time()
     delta = timedelta(minutes=creation_time.minute % self.size)
     return reset_seconds(creation_time - delta) == self.start_date
 
-  def update_current_chunk(self, message):
-    # updates current chunk values with the new message
-    current_chunk_obj = self.current_chunk[1]
-    current_chunk_obj.update(message)
-
   def update(self, message):
+    # updates the container with the new message
     if self.is_duplicate(message):
       logger.info('duplicated tweet: {0} not processing!'.format(message.get_id()))
       return
     self.update_current_chunk(message)
     self.changed_since_retrieval = True
+
+  def update_current_chunk(self, message):
+    # updates current chunk values with the new message
+    current_chunk_obj = self.current_chunk[1]
+    current_chunk_obj.update(message)
 
   def current_chunk_isfull(self):
     return self.current_chunk[1].is_full()
@@ -227,13 +222,3 @@ class ChunkContainer(object):
   def is_duplicate(self, message):
     # membership test is O(1) on average in sets, this should be cheap
     return any(chunk.is_duplicate(message) for _, chunk in self.chunks.iteritems())
-
-  def reduce_chunks(self):
-    return ChunkMgr().reduce_chunks([sc.default() for sc in self.chunks])
-
-  def pretty(self):
-    results = self.reduce_chunks()
-    results[3] = len(results[3])
-    return 'Most used terms: {0} \n Most popular hashtags: {1} \n Users with more mentions: {2} \n Number of users writing tweets: {3} \n Tweets written: {4}'.format(*results)
-# tweets.update({'id_str': "368308360074240000"}, { '$set': {'text': 'u fagget'}})
-

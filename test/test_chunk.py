@@ -3,7 +3,7 @@ from messages.tweet import Tweet
 from db_test_base import MongoTest
 from db.injector import ChunkInjector, TweetInjector
 from db.injector_manager import InjectorManager
-from db.db_manager import DBManager
+from db.db_manager import DBChunkManager
 from db.chunk import ChunkContainer, ChunkMgr, Chunk
 from datetime import datetime
 import tweet_samples
@@ -13,7 +13,7 @@ import unittest
 
 class TestChunkInjector(MongoTest):
   def setUp(self):
-    self.tci = ChunkInjector(DBManager(self.conn, 'stats', 'chunk_containers', index='start_date'))
+    self.tci = ChunkInjector(DBChunkManager(self.conn, 'stats'))
     super(TestChunkInjector, self).setUp()
 
   def load_fixture(self):
@@ -67,10 +67,6 @@ class TestChunkMgr(unittest.TestCase):
     self.assertEquals(c.chunks[0].users, set(['user1']))
     self.assertEquals(c.chunks[0].tweet_ids, set([1, 2, 3, 4]))
     self.assertEquals(c.chunks[0].user_mentions, {})
-
-  def test_reduce_chunks(self):
-    l = [chunk_dict1, chunk_dict2, chunk_dict3]
-    self.assertEquals(self.mgr.reduce_chunks(l), {})
 
   def test_get_top_occurrences(self):
     pass
