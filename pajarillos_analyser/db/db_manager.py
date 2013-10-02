@@ -72,7 +72,7 @@ class DBChunkManager(object):
     # returns a ChunkContainer object out from the provided dictionary
     # here start_date is expected to be the key in the db
     container = self.chunk_mgr.load_chunk_container(container_dict)
-    self._set_container_fields_from_db(container_dict, container)
+    self._set_container_fields_from_db(container)
     return container
 
   def load_chunk_from_id(self, chunk_id):
@@ -82,11 +82,8 @@ class DBChunkManager(object):
     return self.load_chunk(chunk)
 
   def get_chunk(self, chunk_id):
-    # Refactor this and get chunk container. Create a method for each class
-    # that returns the db id out of the candidate and accepts another param
-    # with the name of the id in the db
     logger.info("db manager get_chunk id is {0}".format(chunk_id))
-    res = self.chunk_db.get({'_id': chunk_id})
+    res = self.chunk_db.get(self._chunk_key_dict(chunk_id))
     if not res.count():
       return ''
     return res.next()
@@ -114,16 +111,16 @@ class DBChunkManager(object):
     logger.info(msg.format(key, chunks_size))
     self.update_container(container_dict['start_date'], container_dict)
 
-  def _set_container_fields_from_db(self, container_dict, container_obj):
+  def _set_container_fields_from_db(self, container):
     ''' after fetching a container from the db and initializing the container
     object some of their fields need to be translated from DB representation
     (like ids in the DB) to actual information to be used by the object '''
-    container_obj.start_date = self.chunk_mgr.get_date_from_db_key(container_obj.start_date)
-    current_chunk_id = container_obj.current_chunk[0]
+    container.start_date = self.chunk_mgr.get_date_from_db_key(container.start_date)
+    current_chunk_id = container.current_chunk[0]
     if current_chunk_id:
-      container_obj.current_chunk = (current_chunk_id, self.load_chunk_from_id(current_chunk_id))
-    chunks = container_dict.get('chunks', [])
-    container_obj.chunks = dict((chunkid, self.load_chunk_from_id(chunkid)) for chunkid in chunks)
+      container.current_chunk = (current_chunk_id, self.load_chunk_from_id(current_chunk_id))
+    container.chunks = dict((chunk_id, self.load_chunk_from_id(chunk_id)) for \
+                                                                chunk_id in container.chunks)
 
 
 class DBHandler(object):
