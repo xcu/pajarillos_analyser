@@ -17,6 +17,7 @@ class ChunkMgr(object):
   that purpose are methods to get the db key for a container
   '''
   def load_empty_chunk_container(self, size, sdate):
+    # sdate is a datetime object
     return self.load_chunk_container({'size': size, 'start_date': sdate})
 
   def load_chunk_container(self, container_dict):
@@ -37,23 +38,10 @@ class ChunkMgr(object):
                        ('hashtags', 'sorted_hashtags'))
     results = {}
     for dict_key, list_key in occurrence_keys:
-      dicts = [getattr(sc, dict_key) for sc in chunk_list]
-      lists = [getattr(sc, list_key) for sc in chunk_list]
+      dicts = [getattr(chunk, dict_key) for chunk in chunk_list]
+      lists = [getattr(chunk, list_key) for chunk in chunk_list]
       results[dict_key] = get_top_occurrences(number_of_occurrences, dicts, lists)
     return results
-
-  def postprocess_chunks(self, terms, user_mentions, hashtags, users, tweet_ids):
-    def get_sorted(iterable, trim=0):
-      sorted_list = sorted(iterable.iteritems(), key=lambda x: x[1], reverse=True)
-      if trim:
-        return sorted_list[:trim]
-      return sorted_list
-    terms = dict(i for i in terms.iteritems() if not self.filter_term(i[0]))
-    return (get_sorted(terms, 20),
-            get_sorted(user_mentions, 10),
-            get_sorted(hashtags, 10),
-            len(users),
-            len(tweet_ids))    
 
   def filter_term(self, term):
     if len(term) <= 2:
@@ -63,10 +51,12 @@ class ChunkMgr(object):
                        'sin', 'una', 'unas', 'uno', 'unos'])
     return term.lower() in filter_list
 
-  def get_date_db_key(self, date):
+  def get_chunk_id_in_db(self, date):
+    ''' expects a datetime object '''
     return convert_date(date)
 
-  def get_date_from_db_key(self, key):
+  def get_chunk_att_from_db_id(self, key):
+    ''' expects db id, returns datetime obj '''
     return datetime.utcfromtimestamp(key)
 
   def get_container_db_index_key(self):
@@ -74,6 +64,79 @@ class ChunkMgr(object):
 
   def get_chunk_db_index_key(self):
     return '_id'
+
+
+class ChunkContainer(object):
+  def __init__(self, size, start_date, **kwargs):
+    # size of container in minutes
+    assert not 60 % size, "60 must be divisible by ChunkContainer size"
+    self.size = size
+    self.start_date = start_date
+    # key: ObjectId, val: Chunk obj
+    self.chunks = kwargs.get('chunks', {})
+    # kwargs['current_chunk'] is the id in the db
+    self.current_chunk = kwargs.get('current_chunk')
+    if self.current_chunk:
+      # (id in db, chunk object)
+      self.current_chunk = (self.current_chunk, None)
+    else:
+      # fresh obj, nothing in db yet.
+      self.current_chunk = (None, self.get_new_current_chunk())
+    self.changed_since_retrieval = False
+
+  def num_tweets(self):
+    return sum((c.num_tweets() for c in self.chunks))
+
+  def num_users(self):
+    return sum((c.num_users() for c in self.chunks))
+
+  def get_db_key(self):
+    return ChunkMgr().get_chunk_id_in_db(self.start_date)
+
+  def default(self):
+    ''' json dictionary with the object representation to be stored in the db.
+    Current chunk only cares about the db id, so '''
+    return {'size': self.size,
+            'start_date': self.get_db_key(),
+            'chunk_size': CHUNK_SIZE,
+            'chunks': self.chunks.keys(),
+            'current_chunk': self.current_chunk[0]}
+
+  def tweet_fits(self, tweet):
+    # returns True if the tweet is inside the container window
+    def reset_seconds(date):
+      return datetime(date.year, date.month, date.day, date.hour, date.minute)
+    creation_time = tweet.get_creation_time()
+    delta = timedelta(minutes=creation_time.minute % self.size)
+    return reset_seconds(creation_time - delta) == self.start_date
+
+  def update(self, message):
+    # updates the container with the new message
+    if self.is_duplicate(message):
+      logger.info('duplicated tweet: {0} not processing!'.format(message.get_id()))
+      return
+    self._update_current_chunk(message)
+    self.changed_since_retrieval = True
+
+  def _update_current_chunk(self, message):
+    # updates current chunk values with the new message
+    current_chunk_obj = self.current_chunk[1]
+    current_chunk_obj.update(message)
+
+  def current_chunk_isfull(self):
+    return self.current_chunk[1].is_full()
+
+  def store_current_chunk(self, id_in_db):
+    # puts current_chunk in the chunks list and creates a new one
+    self.chunks[id_in_db] = self.current_chunk[1]
+    self.current_chunk = (None, self.get_new_current_chunk())
+
+  def get_new_current_chunk(self):
+    return ChunkMgr().load_chunk(self.start_date, {})
+
+  def is_duplicate(self, message):
+    # membership test is O(1) on average in sets, this should be cheap
+    return any(chunk.is_duplicate(message) for _, chunk in self.chunks.iteritems())
 
 
 class Chunk(object):
@@ -152,73 +215,3 @@ class Chunk(object):
 
   def num_users(self):
     return len(self.users)
-
-
-class ChunkContainer(object):
-  def __init__(self, size, start_date, **kwargs):
-    # size of container in minutes
-    assert not 60 % size, "60 must be divisible by ChunkContainer size"
-    self.size = size
-    self.start_date = start_date
-    # key: ObjectId, val: Chunk obj
-    self.chunks = kwargs.get('chunks', {})
-    # (id in db, no object fetched yet)
-    self.current_chunk = kwargs.get('current_chunk')
-    if self.current_chunk:
-      self.current_chunk = (self.current_chunk, None)
-    else:
-      self.current_chunk = (None, self.get_new_current_chunk())
-    self.changed_since_retrieval = False
-
-  def num_tweets(self):
-    return sum((c.num_tweets() for c in self.chunks))
-
-  def num_users(self):
-    return sum((c.num_users() for c in self.chunks))
-
-  def get_db_key(self):
-    return ChunkMgr().get_date_db_key(self.start_date)
-
-  def default(self):
-    # DB only cares about the chunk index
-    return {'size': self.size,
-            'start_date': self.get_db_key(),
-            'chunk_size': CHUNK_SIZE,
-            'chunks': self.chunks.keys(),
-            'current_chunk': self.current_chunk[0] if self.current_chunk else None}
-
-  def tweet_fits(self, tweet):
-    # returns True if the tweet is inside the container window
-    def reset_seconds(date):
-      return datetime(date.year, date.month, date.day, date.hour, date.minute)
-    creation_time = tweet.get_creation_time()
-    delta = timedelta(minutes=creation_time.minute % self.size)
-    return reset_seconds(creation_time - delta) == self.start_date
-
-  def update(self, message):
-    # updates the container with the new message
-    if self.is_duplicate(message):
-      logger.info('duplicated tweet: {0} not processing!'.format(message.get_id()))
-      return
-    self.update_current_chunk(message)
-    self.changed_since_retrieval = True
-
-  def update_current_chunk(self, message):
-    # updates current chunk values with the new message
-    current_chunk_obj = self.current_chunk[1]
-    current_chunk_obj.update(message)
-
-  def current_chunk_isfull(self):
-    return self.current_chunk[1].is_full()
-
-  def store_current_chunk(self, id_in_db):
-    # puts current_chunk in the chunks list and creates a new one
-    self.chunks[id_in_db] = self.current_chunk[1]
-    self.current_chunk = (None, self.get_new_current_chunk())
-
-  def get_new_current_chunk(self):
-    return ChunkMgr().load_chunk(self.start_date, {})
-
-  def is_duplicate(self, message):
-    # membership test is O(1) on average in sets, this should be cheap
-    return any(chunk.is_duplicate(message) for _, chunk in self.chunks.iteritems())

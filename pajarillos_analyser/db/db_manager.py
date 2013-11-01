@@ -62,7 +62,7 @@ class DBChunkManager(object):
   def get_chunk_container(self, sdate):
     # returns a dictionary with the container stored with the provided date
     logger.info("db manager get_chunk_container: sdate is {0}".format(sdate))
-    container_id = self.chunk_mgr.get_date_db_key(sdate)
+    container_id = self.chunk_mgr.get_chunk_id_in_db(sdate)
     res = self.container_db.get(self._container_key_dict(container_id))
     if not res.count():
       return ''
@@ -98,8 +98,8 @@ class DBChunkManager(object):
     # pick containers between sdate, edate
     # for each container retrieve all its chunks
     # finally do sorting algorithm on those
-    containers = self.container_db.get_chunk_range(self.chunk_mgr.get_date_db_key(sdate),
-                                         self.chunk_mgr.get_date_db_key(edate))
+    containers = self.container_db.get_chunk_range(self.chunk_mgr.get_chunk_id_in_db(sdate),
+                                         self.chunk_mgr.get_chunk_id_in_db(edate))
     chunk_ids = (container.get('chunks', []) for container in containers)
     return itertools.chain(*chunk_ids)
 
@@ -115,7 +115,7 @@ class DBChunkManager(object):
     ''' after fetching a container from the db and initializing the container
     object some of their fields need to be translated from DB representation
     (like ids in the DB) to actual information to be used by the object '''
-    container.start_date = self.chunk_mgr.get_date_from_db_key(container.start_date)
+    container.start_date = self.chunk_mgr.get_chunk_att_from_db_id(container.start_date)
     current_chunk_id = container.current_chunk[0]
     if current_chunk_id:
       container.current_chunk = (current_chunk_id, self.load_chunk_from_id(current_chunk_id))

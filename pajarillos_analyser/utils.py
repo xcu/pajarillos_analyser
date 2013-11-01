@@ -101,8 +101,8 @@ def get_top_occurrences(num_occurrences, dicts, sorted_lists):
       if abs(total_occurrences[0][0]) >= abs(maxs_sum):
         index = find_le([i[0] for i in total_occurrences], maxs_sum)
         if index >= num_occurrences:
-          return ((abs(t[0]), t[1]) for t in total_occurrences[:num_occurrences])
-  return ((abs(t[0]), t[1]) for t in total_occurrences[:num_occurrences])
+          return [(abs(t[0]), t[1]) for t in total_occurrences[:num_occurrences]]
+  return [(abs(t[0]), t[1]) for t in total_occurrences[:num_occurrences]]
 
 def chunks_are_equal(col1, col2):
   cols_are_the_same(col1, col2)
