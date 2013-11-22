@@ -80,7 +80,7 @@ class ChunkContainer(object):
       # (id in db, chunk object)
       self.current_chunk = (self.current_chunk, None)
     else:
-      # fresh obj, nothing in db yet.
+      # (nothing in db yet. fresh obj)
       self.current_chunk = (None, self.get_new_current_chunk())
     self.changed_since_retrieval = False
 
@@ -106,9 +106,10 @@ class ChunkContainer(object):
     # returns True if the tweet is inside the container window
     def reset_seconds(date):
       return datetime(date.year, date.month, date.day, date.hour, date.minute)
-    creation_time = tweet.get_creation_time()
-    delta = timedelta(minutes=creation_time.minute % self.size)
-    return reset_seconds(creation_time - delta) == self.start_date
+    creation_time = reset_seconds(tweet.get_creation_time())
+    lower_bound = self.start_date
+    upper_bound = self.start_date + timedelta(minutes=self.size)
+    return lower_bound <= creation_time and creation_time < upper_bound
 
   def update(self, message):
     # updates the container with the new message
@@ -136,7 +137,7 @@ class ChunkContainer(object):
 
   def is_duplicate(self, message):
     # membership test is O(1) on average in sets, this should be cheap
-    return any(chunk.is_duplicate(message) for _, chunk in self.chunks.iteritems())
+    return any(chunk.is_duplicate(message) for chunk in self.chunks.itervalues())
 
 
 class Chunk(object):
