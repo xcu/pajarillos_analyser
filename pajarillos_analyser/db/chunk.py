@@ -113,7 +113,7 @@ class ChunkContainer(object):
 
   def update(self, message):
     # updates the container with the new message
-    if self.is_duplicate(message):
+    if message in self:
       logger.info('duplicated tweet: {0} not processing!'.format(message.get_id()))
       return
     self._update_current_chunk(message)
@@ -135,9 +135,9 @@ class ChunkContainer(object):
   def get_new_current_chunk(self):
     return ChunkMgr().load_chunk(self.start_date, {})
 
-  def is_duplicate(self, message):
+  def __contains__(self, message):
     # membership test is O(1) on average in sets, this should be cheap
-    return any(chunk.is_duplicate(message) for chunk in self.chunks.itervalues())
+    return any(message in chunk for chunk in self.chunks.itervalues())
 
 
 class Chunk(object):
@@ -200,7 +200,7 @@ class Chunk(object):
     self.users.add(message.get_user())
     self.changed_since_retrieval = True
 
-  def is_duplicate(self, message):
+  def __contains__(self, message):
     return message.get_id() in self.tweet_ids
 
   def _update_list_generic(self, new_list, attr):
