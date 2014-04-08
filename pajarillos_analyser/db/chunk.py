@@ -8,25 +8,67 @@ logging.basicConfig(filename='tweets.log',
                     format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger('chunk_container')
 
-CHUNK_SIZE = 100
-
 
 class ChunkMgr(object):
   '''
   this class should be completely decoupled from the DB layer. All it provides for
   that purpose are methods to get the db key for a container
   '''
-  def load_empty_chunk_container(self, size, sdate):
-    # sdate is a datetime object
-    return self.load_chunk_container({'size': size, 'start_date': sdate})
+  def __init__(self, dbmgr):
+    self.dbmgr = dbmgr
 
-  def load_chunk_container(self, container_dict):
+  @property
+  def chunk_size(self):
+    return 100
+
+  @property
+  def container_size(self):
+    return 1
+
+  def save_container_in_db(self, container):
+    # chunks will be object ids already, no worries about them
+    # current chunk needs to get its sorted lists recalculated
+    # and update its entry in the db (fetching by its object id)
+    if container.current_chunk:
+      chunk_id, chunk_obj = container.current_chunk
+      if chunk_id:
+        self.dbmgr.update_chunk(chunk_id, chunk_obj.default())
+      else:
+        container.current_chunk = (self.dbmgr.save_chunk(chunk_obj), container.current_chunk)
+    self.dbmgr.upsert_container(container.default())
+
+  def store_current_chunk_in_db(self, container):
+    # TODO: what the hell is current_chunk[1]?
+    id_ref = self.dbmgr.save_chunk(container.current_chunk[1])
+    # link the DB id as the id of the current chunk within the container
+    container.set_current_chunk(id_ref)
+
+  def get_chunk_container_from_date(self, start):
+    '''
+    loads the time chunk from the db if it exists or creates a new one
+    @param start datetime object to match a key in the db
+    '''
+    logger.info("trying to get chunk from date {0}".format(start))
+    if not self._get_chunk_container(start):
+      return self.get_empty_chunk_container(self.container_size, start)
+    return self.dbmgr.load_container_obj_from_id(start)
+
+  def _get_chunk_container(self, start_time):
+    # returns the container in the db with that start_time
+    return self.dbmgr.load_container_json_from_id(start_time)
+
+  def get_empty_chunk_container(self, size, sdate):
+    # sdate is a datetime object
+    return self.get_chunk_container({'size': size, 'start_date': sdate})
+
+  def get_chunk_container(self, container_dict):
     # here start_date is expected to be a datetime object
+    # container_dict should contain already the Chunk objects, not the dictionaries
     return ChunkContainer(container_dict.pop('size'),
                           container_dict.pop('start_date'),
                           **container_dict)
 
-  def load_chunk(self, parent_container, chunk_dict):
+  def get_chunk(self, parent_container, chunk_dict):
     return Chunk(parent_container, **chunk_dict)
 
   def get_top_occurrences(self, chunk_list, number_of_occurrences):
@@ -76,10 +118,9 @@ class ChunkContainer(object):
     self.chunks = kwargs.get('chunks', {})
     # kwargs['current_chunk'] is the id in the db
     self.current_chunk = kwargs.get('current_chunk')
-    if self.current_chunk:
-      # (id in db, chunk object)
-      self.current_chunk = (self.current_chunk, None)
-    else:
+    if not self.current_chunk:
+      # if it exists it should have already a db id and its chunk obj
+      # TODO: this should be a NamedTuple
       # (nothing in db yet. fresh obj)
       self.current_chunk = (None, self.get_new_current_chunk())
     self.changed_since_retrieval = False
@@ -91,13 +132,14 @@ class ChunkContainer(object):
     return sum((c.num_users() for c in self.chunks))
 
   def get_db_key(self):
-    return ChunkMgr().get_chunk_id_in_db(self.start_date)
+    return ChunkMgr(xxxxxxxxxxxxx).get_chunk_id_in_db(self.start_date)
 
   def default(self):
     ''' json dictionary with the object representation to be stored in the db.
     Current chunk only cares about the db id, so '''
     return {'size': self.size,
             'start_date': self.get_db_key(),
+            # TODO: refactor constant
             'chunk_size': CHUNK_SIZE,
             'chunks': self.chunks.keys(),
             'current_chunk': self.current_chunk[0]}
@@ -116,24 +158,19 @@ class ChunkContainer(object):
     if message in self:
       logger.info('duplicated tweet: {0} not processing!'.format(message.get_id()))
       return
-    self._update_current_chunk(message)
+    self.current_chunk[1].update(message)
     self.changed_since_retrieval = True
-
-  def _update_current_chunk(self, message):
-    # updates current chunk values with the new message
-    current_chunk_obj = self.current_chunk[1]
-    current_chunk_obj.update(message)
 
   def current_chunk_isfull(self):
     return self.current_chunk[1].is_full()
 
-  def store_current_chunk(self, id_in_db):
+  def set_current_chunk(self, id_in_db):
     # puts current_chunk in the chunks list and creates a new one
     self.chunks[id_in_db] = self.current_chunk[1]
     self.current_chunk = (None, self.get_new_current_chunk())
 
   def get_new_current_chunk(self):
-    return ChunkMgr().load_chunk(self.start_date, {})
+    return ChunkMgr(xxxxxxxxxxxxx).get_chunk(self.start_date, {})
 
   def __contains__(self, message):
     # membership test is O(1) on average in sets, this should be cheap
@@ -157,6 +194,7 @@ class Chunk(object):
     self.deserialize_sorted_lists()
 
   def is_full(self):
+    # TODO: refactor constant
     return len(self.tweet_ids) >= CHUNK_SIZE
 
   def sorted_dicts(self):

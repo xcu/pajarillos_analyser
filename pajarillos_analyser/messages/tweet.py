@@ -1,13 +1,13 @@
 from messages.message import Message
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from collections import defaultdict
 import calendar
 import re
 
 
 class Tweet(Message):
-  def can_be_processed(self):
+  def is_time_based(self):
     return True
 
   def get_text(self):
@@ -67,18 +67,6 @@ class Tweet(Message):
       f.write('{0}\t'.format(self.get_hashtags().encode('utf-8')))
       f.write('{0}\t'.format(self.get_creation_time(process=False).encode('utf-8')))
       f.write('\n')
-
-  def get_associated_container(self, chunk_container_size):
-    ''' returns the time chunk the tweet belongs to
-    @params chunk_container_size, integer with the number of minutes delimiting a
-     chunk. 60 must be divisible by it'''
-    def reset_seconds(date):
-      return datetime(date.year, date.month, date.day, date.hour, date.minute)
-    if chunk_container_size > 60 or 60 % chunk_container_size:
-      raise Exception("chunk_container_size of size {0} is not valid".format(chunk_container_size))
-    creation_time = self.get_creation_time()
-    delta = timedelta(minutes=creation_time.minute % chunk_container_size)
-    return reset_seconds(creation_time - delta)
 
   def get_terms(self):
     terms = defaultdict(int)

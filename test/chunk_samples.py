@@ -2,19 +2,19 @@ from datetime import datetime
 
 chunk_container_sample = {
     "_id" : "5249997039d092f9c75b3dbf",
-    "chunks" : [],
+    "chunks" : {},
     "chunk_size" : 100,
     "current_chunk" : "52499970e138235994c416a3",
-    "start_date" : 1376646480,
+    "start_date" : datetime(2013, 8, 16, 9, 48),
     "size" : 10
 }
 
 chunk_container_sample_bad_size = {
     "_id" : "5249997039d092f9c75b3dbf",
-    "chunks" : [],
+    "chunks" : {},
     "chunk_size" : 100,
     "current_chunk" : "52499970e138235994c416a3",
-    "start_date" : 1376646480,
+    "start_date" : datetime(2013, 8, 16, 9, 48),
     "size" : 100
 }
 
@@ -99,3 +99,13 @@ chunk_sample_small2 = {"parent_container": datetime(2013, 8, 16, 9, 50),
                       "sorted_hashtags" : [[-1, ["10CosasQueOdio"]]],
                       "users": ["corcho", "con", "tiopaco"],
                       "tweet_ids": ["58470023599958824960"]}
+
+chunk_container_with_chunks = {
+    "_id" : "5249997039d092f9c75b3dcf",
+    "chunks" : {"1": chunk_sample_small1.copy(),
+                "2": chunk_sample_small2.copy()},
+    "chunk_size" : 100,
+    "current_chunk" : "52499970e138235994c416a3",
+    "start_date" : datetime(2013, 8, 16, 9, 48),
+    "size" : 10
+}

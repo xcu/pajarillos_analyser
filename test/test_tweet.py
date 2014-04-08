@@ -83,15 +83,15 @@ class TestTweet(unittest.TestCase):
     tweet = Tweet(json.loads(tweet_samples.user_mentions_tweet))
     self.assertEquals(tweet.get_user(field='i dont exist'), '')
 
-  def testget_associated_container(self):
+  def test_get_associated_container_key(self):
     tweet = Tweet(json.loads(tweet_samples.hashtags_tweet))
-    self.assertEquals(tweet.get_associated_container(10).time(), time(8, 30))
+    self.assertEquals(tweet._get_associated_container_key(10).time(), time(8, 30))
     tweet.message['created_at'] = u'Wed Aug 07 08:44:39 +0000 2013'
-    self.assertEquals(tweet.get_associated_container(10).time(), time(8, 40))
-    self.assertRaises(Exception, tweet.get_associated_container, 50)
-    self.assertRaises(Exception, tweet.get_associated_container, 120)
+    self.assertEquals(tweet._get_associated_container_key(10).time(), time(8, 40))
+    self.assertRaises(Exception, tweet._get_associated_container_key, 50)
+    self.assertRaises(Exception, tweet._get_associated_container_key, 120)
     tweet.message['created_at'] = u'Wed Aug 07 00:59:39 +0000 2013'
-    self.assertEquals(tweet.get_associated_container(30).time(), time(0, 30))
+    self.assertEquals(tweet._get_associated_container_key(30).time(), time(0, 30))
 
   def test_get_terms(self):
     tweet = Tweet(json.loads(tweet_samples.hashtags_tweet))

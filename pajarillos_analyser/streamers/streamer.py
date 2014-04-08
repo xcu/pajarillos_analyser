@@ -8,6 +8,7 @@ class Streamer(object):
     self.mf = MessageFactory()
 
   def create_message(self, message, serialized=True):
+    # deserializes a message and calls the message factory method
     if serialized:
       deserialized_message = json.loads(message)
     else:

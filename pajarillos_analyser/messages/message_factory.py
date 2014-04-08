@@ -21,6 +21,8 @@ class MessageFactory(object):
                        }
 
   def create_message(self, value):
+    # receives a dictionary with the parameters to create the message
+    # and returns a message object
     for message_type in self.message_type_binds.iterkeys():
       if message_type in value:
         return self.message_type_binds[message_type](value)
