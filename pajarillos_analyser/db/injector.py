@@ -41,13 +41,14 @@ class ChunkInjector(Injector):
       # store the current container and get a new one
       self._refresh_current_container(message)
     if self.current_chunk_container.current_chunk_isfull():
-      self.chunk_mgr.store_current_chunk_in_db(self.current_chunk_container)
+      self.chunk_mgr.save_chunk_in_db(self.current_chunk_container,
+                                      self.current_chunk_container.current_chunk)
     self.current_chunk_container.update(message)
 
   def pick_container_from_msg_date(self, message):
     # given a message object, returns the associated container for that time
     container_key = self._get_associated_container_key(message)
-    return self.chunk_mgr.get_chunk_container_from_date(container_key)
+    return self.chunk_mgr.load_obj_from_id(container_key)
 
   def _refresh_current_container(self, message):
     if self.current_chunk_container.changed_since_retrieval:
@@ -55,7 +56,7 @@ class ChunkInjector(Injector):
       logger.info(msg.format(self.current_chunk_container.start_date,
                              message.get_id(),
                              message.get_creation_time()))
-      self.chunk_mgr.save_container_in_db(self.current_chunk_container)
+      self.chunk_mgr.save_in_db(self.current_chunk_container)
     self.current_chunk_container = self.pick_container_from_msg_date(message)
 
   def _get_associated_container_key(self, message):
@@ -72,5 +73,5 @@ class ChunkInjector(Injector):
 
   def last_to_db(self):
     if self.current_chunk_container:
-      self.chunk_mgr.save_container_in_db(self.current_chunk_container)
+      self.chunk_mgr.save_in_db(self.current_chunk_container)
 

@@ -30,14 +30,14 @@ class DBChunkManager(object):
     self.chunk_mgr = ChunkMgr(xxxxxxxxxxxxx)
     self.container_db = DBHandler(conn[db_name][CONTAINER_COLLECTION])
     self.chunk_db = DBHandler(conn[db_name][CHUNK_COLLECTION])
-    index_key = self.chunk_mgr.get_container_db_index_key()
+    index_key = self.chunk_mgr.get_db_index_key()
     self.container_db.collection.ensure_index(index_key, unique=True)
     index_key = self.chunk_mgr.get_chunk_db_index_key()
     self.chunk_db.collection.ensure_index(index_key, unique=True)
 
   def _container_key_dict(self, container_id):
     ''' {container_index_str: container_id}'''
-    index_key = self.chunk_mgr.get_container_db_index_key()
+    index_key = self.chunk_mgr.get_db_index_key()
     return {index_key: container_id}
 
   def _chunk_key_dict(self, chunk_id):
@@ -52,49 +52,18 @@ class DBChunkManager(object):
     ''' it actually upserts '''
     return self.chunk_db.update_doc(self._chunk_key_dict(chunk_id), chunk)
 
-  def save_chunk(self, chunk):
+  def save_chunk(self, json_chunk):
     ''' inserts, but doesn't update '''
-    return self.chunk_db.insert_doc(chunk.default())
-
-  def load_container_obj_from_id(self, sdate):
-    # returns a container object given a datetime, ready to be used
-    container = self.load_container_json_from_id(sdate)
-    if not container:
-      raise Exception("No container found with date {0}".format(sdate))
-    return self.load_container_obj_from_json(container)
+    return self.chunk_db.insert_doc(json_chunk)
 
   def load_container_json_from_id(self, sdate):
     # returns a dictionary with the container stored with the provided date
     logger.info("db manager load_container_json_from_id: sdate is {0}".format(sdate))
-    container_id = self.chunk_mgr.get_chunk_id_in_db(sdate)
+    container_id = self.chunk_mgr.date_to_id_in_db(sdate)
     res = self.container_db.get(self._container_key_dict(container_id))
     if not res.count():
       return ''
     return res.next()
-
-  def load_container_obj_from_json(self, container_dict):
-    # returns a ChunkContainer object out from the provided dictionary
-    # here start_date is expected to be the key in the db
-    container = self.chunk_mgr.get_chunk_container(container_dict)
-    self._set_container_fields_from_db(container)
-    return container
-
-  def _set_container_fields_from_db(self, container):
-    ''' after fetching a container from the db and initializing the container
-    object some of their fields need to be translated from DB representation
-    (like ids in the DB) to actual information to be used by the object '''
-    container.start_date = self.chunk_mgr.get_chunk_att_from_db_id(container.start_date)
-    current_chunk_id = container.current_chunk[0]
-    if current_chunk_id:
-      container.current_chunk = (current_chunk_id, self.load_chunk_obj_from_id(current_chunk_id))
-    container.chunks = dict((chunk_id, self.load_chunk_obj_from_id(chunk_id)) for \
-                                                                chunk_id in container.chunks)
-
-  def load_chunk_obj_from_id(self, chunk_id):
-    chunk = self.load_chunk_json_from_id(chunk_id)
-    if not chunk:
-      raise Exception("No chunk found with id {0}".format(chunk_id))
-    return self.load_chunk_obj_from_json(chunk)
 
   def load_chunk_json_from_id(self, chunk_id):
     logger.info("db manager get_chunk id is {0}".format(chunk_id))
@@ -103,16 +72,10 @@ class DBChunkManager(object):
       return ''
     return res.next()
 
-  def load_chunk_obj_from_json(self, chunk_dict):
-    parent_container = chunk_dict.pop('parent_container')
-    if not parent_container:
-        raise Exception("no parent container found for chunk {0}".format(chunk_dict))
-    return self.chunk_mgr.get_chunk(parent_container, chunk_dict)
-
   def get_chunk_range(self, sdate, edate):
     ''' returns all chunk ids between sdate, edate '''
-    containers = self.container_db.get_chunk_range(self.chunk_mgr.get_chunk_id_in_db(sdate),
-                                         self.chunk_mgr.get_chunk_id_in_db(edate))
+    containers = self.container_db.get_chunk_range(self.chunk_mgr.date_to_id_in_db(sdate),
+                                         self.chunk_mgr.date_to_id_in_db(edate))
     chunk_ids = (container.get('chunks', []) for container in containers)
     return itertools.chain(*chunk_ids)
 

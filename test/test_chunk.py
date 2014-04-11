@@ -34,8 +34,8 @@ class TestChunkMgr(unittest.TestCase):
     chunk_samples.chunk_sample_small2['parent_container'] = datetime(2013, 8, 16, 9, 50)
     chunk_samples.chunk_container_sample["size"] = 10
 
-  def test_get_empty_chunk_container(self):
-    c = self.mgr.get_empty_chunk_container(3, datetime(2013, 10, 4, 9, 8))
+  def test_get_empty_obj(self):
+    c = self.mgr.get_empty_obj(3, datetime(2013, 10, 4, 9, 8))
     self.assertEquals(c.size, 3)
     self.assertEquals(c.start_date, datetime(2013, 10, 4, 9, 8))
     self.assertEquals(c.changed_since_retrieval, False)
@@ -44,8 +44,8 @@ class TestChunkMgr(unittest.TestCase):
     self.assertEquals(c.current_chunk[0], None)
     self.assertEquals(type(c.current_chunk[1]), Chunk)
 
-  def test_get_chunk_container(self):
-    c = self.mgr.get_chunk_container(chunk_samples.chunk_container_sample)
+  def test_get_obj_from_db(self):
+    c = self.mgr.get_obj(chunk_samples.chunk_container_sample)
     self.assertEquals(type(c), ChunkContainer)
     self.assertEquals(c.size, 10)
     self.assertEquals(c.start_date, datetime(2013, 8, 16, 9, 48))

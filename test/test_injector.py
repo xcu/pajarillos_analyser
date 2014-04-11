@@ -50,7 +50,7 @@ class TestChunkInjector(MongoTest):
     c = self.tci.get_chunk_from_date(datetime.utcfromtimestamp(1076646540))
     self.assertEquals(c.chunks, [])
 
-  # TODO: refactor, it now calls _get_chunk_container
+  # TODO: refactor, it now calls _get_chunk_container_from_db
   def test_chunk_exists(self):
     self.assertTrue(self.tci.chunk_exists(datetime.utcfromtimestamp(1376646540)))
     self.assertFalse(self.tci.chunk_exists(datetime.utcfromtimestamp(1076646540)))
