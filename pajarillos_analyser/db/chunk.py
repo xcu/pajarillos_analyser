@@ -1,7 +1,6 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
-from utils import get_top_occurrences, sorted_list_from_dict,\
-                  convert_date, update_dict, update_set, CHUNK_DATA
+from utils import get_top_occurrences, sorted_list_from_dict, CHUNK_DATA
 import logging
 logging.basicConfig(filename='tweets.log',
                     level=logging.DEBUG,
@@ -45,10 +44,10 @@ class ContainerMgr(ObjMgr):
     if container.current_chunk:
       json_chunk = container.current_chunk.default()
       if container.current_chunk.obj_id:
-        self.dbmgr.update_chunk(container.current_chunk.obj_id, json_chunk)
+        self.dbmgr.update_obj(container.current_chunk.obj_id, json_chunk)
       else:
         container.current_chunk.obj_id = self.dbmgr.save_chunk(json_chunk)
-    self.dbmgr.upsert_container(container.default())
+    self.dbmgr.update_obj(container.default())
 
   def get_obj(self, json_container):
     # here start_date is expected to be a datetime object
@@ -68,7 +67,7 @@ class ContainerMgr(ObjMgr):
     @param start datetime object to match a key in the db
     '''
     logger.info("trying to get chunk container from date {0}".format(start))
-    container = self.dbmgr.load_container_json_from_id(start)
+    container = self.dbmgr.load_json_from_id(start)
     if not container:
       logger.info("Container not found, creating an empty one")
       return self.get_empty_obj(self.container_size, start)
@@ -86,7 +85,7 @@ class ContainerMgr(ObjMgr):
     ''' after fetching a container from the db and initializing the container
     object some of their fields need to be translated from DB representation
     (like ids in the DB) to actual information to be used by the object '''
-    container.start_date = self.id_in_db_to_date(container.start_date)
+    container.start_date = self.dbmgr.id_in_db_to_date(container.start_date)
     current_chunk_id = container.current_chunk.obj_id
     if current_chunk_id:
       container.current_chunk = self.load_chunk_obj_from_id(current_chunk_id)
@@ -95,14 +94,6 @@ class ContainerMgr(ObjMgr):
 
   def get_db_index_key(self):
     return 'start_date'
-
-  def date_to_id_in_db(self, date):
-    ''' expects a datetime object, returns db id '''
-    return convert_date(date)
-
-  def id_in_db_to_date(self, key):
-    ''' expects db id, returns datetime obj '''
-    return datetime.utcfromtimestamp(key)
 
 
 class ChunkContainer(object):
@@ -124,14 +115,11 @@ class ChunkContainer(object):
   def num_users(self):
     return sum((c.num_users() for c in self.chunks))
 
-  def id_in_db(self):
-    return ContainerMgr(xxxxxxxxxxxxx).date_to_id_in_db(self.start_date)
-
   def default(self):
     ''' json dictionary with the object representation to be stored in the db.
     Current chunk only cares about the db id, so '''
     return {'size': self.size,
-            'start_date': self.id_in_db(),
+            'start_date': self.start_date,
             # TODO: refactor constant
             'chunk_size': CHUNK_SIZE,
             'chunks': [chunk.obj_id for chunk in self.chunks],
@@ -189,7 +177,7 @@ class ChunkMgr(object):
     return Chunk(parent_container, **chunk_dict)
 
   def load_obj_from_id(self, chunk_id):
-    chunk = self.load_chunk_json_from_id(chunk_id)
+    chunk = self.load_json_from_id(chunk_id)
     if not chunk:
       raise Exception("No chunk found with id {0}".format(chunk_id))
     return self.load_chunk_obj_from_json(chunk)
