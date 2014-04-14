@@ -3,7 +3,7 @@ from messages.tweet import Tweet
 from db_test_base import MongoTest
 from db.injector import ChunkInjector, TweetInjector
 from db.injector_manager import InjectorManager
-from db.db_manager import DBManager, DBChunkManager
+from db.db_manager import ObjDB, ChunkDB
 from db.chunk import ChunkContainer
 from datetime import datetime
 import tweet_samples
@@ -12,7 +12,7 @@ import ujson as json
 
 class TestChunkInjector(MongoTest):
   def setUp(self):
-    self.tci = ChunkInjector(DBChunkManager(self.conn, 'stats'))
+    self.tci = ChunkInjector(ChunkDB(self.conn, 'stats'))
     super(TestChunkInjector, self).setUp()
 
   def load_fixture(self):
@@ -76,7 +76,7 @@ class TestChunkInjector(MongoTest):
 class TestTweetInjector(MongoTest):
   def load_fixture(self):
     streamer = FileStreamer('mock_db_data')
-    ti = TweetInjector(DBManager(self.conn, 'raw', 'tweets', index='id'))
+    ti = TweetInjector(ObjDB(self.conn, 'raw', 'tweets', index='id'))
     im = InjectorManager(registered_injectors=(ti,))
     im.to_db(streamer)
 
@@ -90,8 +90,8 @@ class TestTweetInjector(MongoTest):
 class Test2Injectors(MongoTest):
   def load_fixture(self):
     streamer = FileStreamer('mock_db_data')
-    ti = TweetInjector(DBManager(self.conn, 'raw', 'tweets', index='id'))
-    tci = ChunkInjector(DBChunkManager(self.conn, 'stats'))
+    ti = TweetInjector(ObjDB(self.conn, 'raw', 'tweets', index='id'))
+    tci = ChunkInjector(ChunkDB(self.conn, 'stats'))
     im = InjectorManager(registered_injectors=(ti, tci))
     im.to_db(streamer)
 

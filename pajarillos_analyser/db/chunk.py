@@ -85,7 +85,7 @@ class ContainerMgr(ObjMgr):
     ''' after fetching a container from the db and initializing the container
     object some of their fields need to be translated from DB representation
     (like ids in the DB) to actual information to be used by the object '''
-    container.start_date = self.dbmgr.id_in_db_to_date(container.start_date)
+    container.start_date = self.dbmgr.id_in_db_to_fieldval(container.start_date)
     current_chunk_id = container.current_chunk.obj_id
     if current_chunk_id:
       container.current_chunk = self.load_chunk_obj_from_id(current_chunk_id)

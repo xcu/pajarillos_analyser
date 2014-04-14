@@ -3,7 +3,7 @@ from messages.tweet import Tweet
 from db_test_base import MongoTest
 from db.injector import ChunkInjector, TweetInjector
 from db.injector_manager import InjectorManager
-from db.db_manager import DBChunkManager
+from db.db_manager import ChunkDB
 from db.chunk import ChunkContainer, ChunkMgr, Chunk
 from datetime import datetime
 import tweet_samples
@@ -15,7 +15,7 @@ from itertools import izip
 
 class TestChunkInjector(MongoTest):
   def setUp(self):
-    self.tci = ChunkInjector(DBChunkManager(self.conn, 'stats'))
+    self.tci = ChunkInjector(ChunkDB(self.conn, 'stats'))
     super(TestChunkInjector, self).setUp()
 
   def load_fixture(self):

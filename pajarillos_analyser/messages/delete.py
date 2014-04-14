@@ -1,5 +1,6 @@
 from messages.message import Message
 
+
 class Delete(Message):
   def _process(self):
     with open("delete", "a") as f:
