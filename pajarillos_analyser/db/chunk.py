@@ -49,11 +49,10 @@ class ContainerMgr(ObjMgr):
     if container.current_chunk:
       json_chunk = container.current_chunk.default()
       if container.current_chunk.obj_id:
-        self.dbmgr.update_obj(container.current_chunk.obj_id, json_chunk)
+        self.chunkmgr.dbmgr.update_obj(json_chunk)
       else:
         container.current_chunk.obj_id = self.chunkmgr.dbmgr.save_chunk(json_chunk)
-    obj_id = self.dbmgr.fieldval_to_id_in_db(container.start_date)
-    self.dbmgr.update_obj(obj_id, container.default())
+    self.dbmgr.update_obj(container.default())
 
   def get_obj(self, json_container):
     return ChunkContainer(self,
@@ -73,11 +72,12 @@ class ContainerMgr(ObjMgr):
     '''
     logger.info("trying to get chunk container from date {0}".format(start))
     container = self.dbmgr.load_json_from_id(start)
-    if not container:
+    if container:
+      logger.info("Container found, retrieving from database")
+      return self.load_obj_from_json(container)
+    else:
       logger.info("Container not found, creating an empty one")
       return self.get_empty_obj(self.size, start)
-    logger.info("Container found, retrieving from database")
-    return self.load_obj_from_json(container)
 
   def load_obj_from_json(self, container_dict):
     # returns a ChunkContainer object out from the provided dictionary
@@ -91,11 +91,12 @@ class ContainerMgr(ObjMgr):
     object some of their fields need to be translated from DB representation
     (like ids in the DB) to actual information to be used by the object '''
     container.start_date = self.dbmgr.id_in_db_to_fieldval(container.start_date)
-    current_chunk_id = container.current_chunk.obj_id
+    # container.current_chunk is only an ObjectId at this point
+    current_chunk_id = container.current_chunk
     if current_chunk_id:
-      container.current_chunk = self.load_chunk_obj_from_id(current_chunk_id)
-    container.chunks = [self.load_chunk_obj_from_id(chunk_id) for
-                                                    chunk_id in container.chunks]
+      container.current_chunk = self.chunkmgr.load_obj_from_id(current_chunk_id)
+    container.chunks = [self.load_obj_from_id(chunk_id) for
+                                              chunk_id in container.chunks]
 
   def get_db_index_key(self):
     return 'start_date'
@@ -179,7 +180,7 @@ class ChunkMgr(ObjMgr):
 
   def get_obj(self, json_chunk):
     return Chunk(json_chunk.get('size'),
-                 json_chunk.get('obj_id'),
+                 json_chunk.get('_id'),
                  json_chunk.get('tweet_ids', []),
                  json_chunk.get('users', []),
                  json_chunk.get('terms', []),
@@ -194,16 +195,13 @@ class ChunkMgr(ObjMgr):
     return self.get_obj({'size': self.size})
 
   def load_obj_from_id(self, chunk_id):
-    chunk = self.load_json_from_id(chunk_id)
+    chunk = self.dbmgr.load_json_from_id(chunk_id)
     if not chunk:
       raise Exception("No chunk found with id {0}".format(chunk_id))
-    return self.load_chunk_obj_from_json(chunk)
+    return self.load_obj_from_json(chunk)
 
   def load_obj_from_json(self, chunk_dict):
-    parent_container = chunk_dict.pop('parent_container')
-    if not parent_container:
-        raise Exception("no parent container found for chunk {0}".format(chunk_dict))
-    return self.chunk_mgr.get_chunk(parent_container, chunk_dict)
+    return self.get_obj(chunk_dict)
 
   def get_top_occurrences(self, chunk_list, number_of_occurrences):
     ''' returns the top number_of_occurrences out of chunk_list for each
@@ -284,7 +282,10 @@ class Chunk(object):
     values = (self.terms, self.sorted_terms,
               self.user_mentions, self.sorted_user_mentions,
               self.hashtags, self.sorted_hashtags, list(self.users), list(self.tweet_ids))
-    return dict(zip(keys, values))
+    d = dict(zip(keys, values))
+    if self.obj_id:
+        d['_id'] = self.obj_id
+    return d
 
   def update(self, message):
     # updates current chunk with the message passed

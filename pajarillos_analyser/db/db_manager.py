@@ -42,8 +42,11 @@ class ObjDB(object):
 #    if flush:
 #      self.db.collection.drop()
 
-  def update_obj(self, obj_id, obj):
-    raise NotImplementedError
+  def _set_id_field_in_db(self, obj):
+    obj[self.index_key] = self.fieldval_to_id_in_db(obj[self.index_key])
+
+  def update_obj(self, obj):
+    self._set_id_field_in_db(obj)
 
   def load_json_from_id(self, db_id):
     res = self.db.get(self._get_index_and_id(db_id))
@@ -71,12 +74,16 @@ class ChunkDB(ObjDB):
                                   index_key,
                                   CHUNK_COLLECTION)
 
-  def update_obj(self, chunk_id, chunk):
+  def update_obj(self, chunk):
     ''' it actually upserts '''
-    return self.db.update_doc(self._get_index_and_id(chunk_id), chunk)
+    super(ChunkDB, self).update_obj(chunk)
+    return self.db.update_doc(self._get_index_and_id(chunk[self.index_key]),
+                              chunk)
 
   def save_chunk(self, json_chunk):
     ''' inserts, but doesn't update '''
+    if json_chunk.get('_id'):
+      raise Exception("Chunk to be inserted, but has id {0}".format(json_chunk['_id']))
     return self.db.insert_doc(json_chunk)
 
 
@@ -94,12 +101,13 @@ class ContainerDB(ObjDB):
     chunk_ids = (container.get('chunks', []) for container in containers)
     return itertools.chain(*chunk_ids)
 
-  def update_obj(self, container_id, container):
+  def update_obj(self, container):
     ''' it actually upserts '''
-    key = self.fieldval_to_id_in_db(container['start_date'])
+    super(ContainerDB, self).update_obj(container)
     logger.info("updating db with key {0}. Chunk containing {1} chunks".\
-                format(key, len(container['chunks'])))
-    return self.db.update_doc(self._get_index_and_id(key), container)
+                format(container[self.index_key], len(container['chunks'])))
+    return self.db.update_doc(self._get_index_and_id(container[self.index_key]),
+                              container)
 
   def load_json_from_id(self, sdate):
     # returns a dictionary with the container stored with the provided date
