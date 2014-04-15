@@ -1,7 +1,7 @@
 from streamers.file_streamer import FileStreamer
 from messages.tweet import Tweet
 from db_test_base import MongoTest
-from db.injector import ChunkInjector, TweetInjector
+from db.injector import ChunkContainerInjector, TweetInjector
 from db.injector_manager import InjectorManager
 from db.db_manager import ChunkDB
 from db.chunk import ChunkContainer, ChunkMgr, Chunk
@@ -13,10 +13,10 @@ import unittest
 from itertools import izip
 
 
-class TestChunkInjector(MongoTest):
+class TestChunkContainerInjector(MongoTest):
   def setUp(self):
-    self.tci = ChunkInjector(ChunkDB(self.conn, 'stats'))
-    super(TestChunkInjector, self).setUp()
+    self.tci = ChunkContainerInjector(ChunkDB(self.conn, 'stats'))
+    super(TestChunkContainerInjector, self).setUp()
 
   def load_fixture(self):
     streamer = FileStreamer('mock_db_data')

@@ -1,5 +1,5 @@
-from db.db_manager import ObjDB
 from streamers.streamer import Streamer
+
 
 class DBStreamer(Streamer):
   def __init__(self, dbmgr):

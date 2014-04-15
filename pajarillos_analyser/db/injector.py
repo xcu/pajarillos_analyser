@@ -1,4 +1,4 @@
-from db.chunk import ChunkMgr
+from db.chunk import ContainerMgr
 from datetime import datetime, timedelta
 import logging
 logging.basicConfig(filename='tweets.log',
@@ -8,10 +8,6 @@ logger = logging.getLogger('db_injector')
 
 
 class Injector(object):
-  def __init__(self, dbmgr):
-    self.dbmgr = dbmgr
-    self.chunk_mgr = ChunkMgr(xxxxxxxxxxxxx)
-
   def to_db(self, message, last_returned_val):
     pass
 
@@ -20,12 +16,17 @@ class Injector(object):
 
 
 class TweetInjector(Injector):
+  # TODO: class shouldn't have a reference to the DB layer directly
+  def __init__(self, dbmgr):
+    self.dbmgr = dbmgr
+
   def to_db(self, message, last_returned_val):
     self.dbmgr.update_doc({'id': int(message.get_id())}, message.message)
 
 
-class ChunkInjector(Injector):
-  def __init__(self):
+class ChunkContainerInjector(Injector):
+  def __init__(self, conn, db_name):
+    self.container_mgr = ContainerMgr(conn, db_name)
     # last modified object
     self.current_chunk_container = None
 
@@ -41,14 +42,14 @@ class ChunkInjector(Injector):
       # store the current container and get a new one
       self._refresh_current_container(message)
     if self.current_chunk_container.current_chunk_isfull():
-      self.chunk_mgr.save_chunk_in_db(self.current_chunk_container,
+      self.container_mgr.save_chunk_in_db(self.current_chunk_container,
                                       self.current_chunk_container.current_chunk)
     self.current_chunk_container.update(message)
 
   def pick_container_from_msg_date(self, message):
     # given a message object, returns the associated container for that time
     container_key = self._get_associated_container_key(message)
-    return self.chunk_mgr.load_obj_from_id(container_key)
+    return self.container_mgr.load_obj_from_id(container_key)
 
   def _refresh_current_container(self, message):
     if self.current_chunk_container.changed_since_retrieval:
@@ -56,7 +57,7 @@ class ChunkInjector(Injector):
       logger.info(msg.format(self.current_chunk_container.start_date,
                              message.get_id(),
                              message.get_creation_time()))
-      self.chunk_mgr.save_in_db(self.current_chunk_container)
+      self.container_mgr.save_in_db(self.current_chunk_container)
     self.current_chunk_container = self.pick_container_from_msg_date(message)
 
   def _get_associated_container_key(self, message):
@@ -65,13 +66,13 @@ class ChunkInjector(Injector):
      chunk. 60 must be divisible by it'''
     def reset_seconds(date):
       return datetime(date.year, date.month, date.day, date.hour, date.minute)
-    if self.chunk_mgr.container_size > 60 or 60 % self.chunk_mgr.container_size:
-      raise Exception("chunk_container_size of size {0} is not valid".format(self.chunk_mgr.container_size))
+    if self.container_mgr.size > 60 or 60 % self.container_mgr.size:
+      raise Exception("chunk_container_size of size {0} is not valid".format(self.container_mgr.size))
     creation_time = message.get_creation_time()
-    delta = timedelta(minutes=creation_time.minute % self.chunk_mgr.container_size)
+    delta = timedelta(minutes=creation_time.minute % self.container_mgr.size)
     return reset_seconds(creation_time - delta)
 
   def last_to_db(self):
     if self.current_chunk_container:
-      self.chunk_mgr.save_in_db(self.current_chunk_container)
+      self.container_mgr.save_in_db(self.current_chunk_container)
 

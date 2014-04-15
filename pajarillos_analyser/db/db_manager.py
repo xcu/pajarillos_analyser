@@ -66,10 +66,10 @@ class ObjDB(object):
 
 class ChunkDB(ObjDB):
   def __init__(self, conn, db_name, index_key):
-    super(ContainerDB, self).__init__(conn,
-                                             db_name,
-                                             index_key,
-                                             CHUNK_COLLECTION)
+    super(ChunkDB, self).__init__(conn,
+                                  db_name,
+                                  index_key,
+                                  CHUNK_COLLECTION)
 
   def update_obj(self, chunk_id, chunk):
     ''' it actually upserts '''
@@ -83,9 +83,9 @@ class ChunkDB(ObjDB):
 class ContainerDB(ObjDB):
   def __init__(self, conn, db_name, index_key):
     super(ContainerDB, self).__init__(conn,
-                                             db_name,
-                                             index_key,
-                                             CONTAINER_COLLECTION)
+                                      db_name,
+                                      index_key,
+                                      CONTAINER_COLLECTION)
 
   def get_chunk_range(self, sdate, edate):
     ''' returns all chunk ids between sdate, edate '''

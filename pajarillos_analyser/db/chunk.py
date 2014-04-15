@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
+from db_manager import ContainerDB, ChunkDB
 from utils import get_top_occurrences, sorted_list_from_dict, CHUNK_DATA
 import logging
 logging.basicConfig(filename='tweets.log',
@@ -9,9 +10,6 @@ logger = logging.getLogger('chunk_container')
 
 
 class ObjMgr(object):
-  def __init__(self, dbmgr):
-    self.dbmgr = dbmgr
-
   @property
   def size(self):
     raise NotImplementedError
@@ -20,6 +18,9 @@ class ObjMgr(object):
     raise NotImplementedError
 
   def get_obj(self, json_obj):
+    raise NotImplementedError
+
+  def get_empty_obj(self, *mandatory_args):
     raise NotImplementedError
 
   def load_obj_from_id(self, id_in_db):
@@ -33,6 +34,10 @@ class ObjMgr(object):
 
 
 class ContainerMgr(ObjMgr):
+  def __init__(self, conn, db_name):
+    self.dbmgr = ContainerDB(conn, db_name, self.get_db_index_key())
+    self.chunkmgr = ChunkMgr(conn, db_name)
+
   @property
   def size(self):
     return 1
@@ -46,15 +51,15 @@ class ContainerMgr(ObjMgr):
       if container.current_chunk.obj_id:
         self.dbmgr.update_obj(container.current_chunk.obj_id, json_chunk)
       else:
-        container.current_chunk.obj_id = self.dbmgr.save_chunk(json_chunk)
-    self.dbmgr.update_obj(container.default())
+        container.current_chunk.obj_id = self.chunkmgr.dbmgr.save_chunk(json_chunk)
+    obj_id = self.dbmgr.fieldval_to_id_in_db(container.start_date)
+    self.dbmgr.update_obj(obj_id, container.default())
 
   def get_obj(self, json_container):
-    # here start_date is expected to be a datetime object
-    # container_dict should contain already the Chunk objects, not the dictionaries
-    return ChunkContainer(json_container.get('size'),
+    return ChunkContainer(self,
+                          json_container.get('size'),
                           json_container.get('start_date'),
-                          json_container.get('chunks'),
+                          json_container.get('chunks', []),
                           json_container.get('current_chunk'))
 
   def get_empty_obj(self, size, sdate):
@@ -70,7 +75,7 @@ class ContainerMgr(ObjMgr):
     container = self.dbmgr.load_json_from_id(start)
     if not container:
       logger.info("Container not found, creating an empty one")
-      return self.get_empty_obj(self.container_size, start)
+      return self.get_empty_obj(self.size, start)
     logger.info("Container found, retrieving from database")
     return self.load_obj_from_json(container)
 
@@ -97,9 +102,10 @@ class ContainerMgr(ObjMgr):
 
 
 class ChunkContainer(object):
-  def __init__(self, size, start_date, chunks, current_chunk):
+  def __init__(self, mgr, size, start_date, chunks, current_chunk):
     # size of container in minutes
     assert not 60 % size, "60 must be divisible by ChunkContainer size"
+    self.mgr = mgr
     self.size = size
     self.start_date = start_date
     # list
@@ -120,8 +126,7 @@ class ChunkContainer(object):
     Current chunk only cares about the db id, so '''
     return {'size': self.size,
             'start_date': self.start_date,
-            # TODO: refactor constant
-            'chunk_size': CHUNK_SIZE,
+            'chunk_size': self.mgr.chunkmgr.size,
             'chunks': [chunk.obj_id for chunk in self.chunks],
             'current_chunk': self.current_chunk.obj_id}
 
@@ -151,18 +156,17 @@ class ChunkContainer(object):
     self.current_chunk = self.get_new_current_chunk()
 
   def get_new_current_chunk(self):
-    return ContainerMgr(xxxxxxxxxxxxx).get_chunk(self.start_date, {})
+    return self.mgr.chunkmgr.get_empty_obj()
 
   def __contains__(self, message):
     # membership test is O(1) on average in sets, this should be cheap
     return any(message in chunk for chunk in iter(self.chunks))
 
 
-class ChunkMgr(object):
-  '''
-  this class should be completely decoupled from the DB layer. All it provides for
-  that purpose are methods to get the db key for a container
-  '''
+class ChunkMgr(ObjMgr):
+  def __init__(self, conn, db_name):
+    self.dbmgr = ChunkDB(conn, db_name, self.get_db_index_key())
+
   @property
   def size(self):
     return 100
@@ -173,8 +177,21 @@ class ChunkMgr(object):
     # link the DB id as the id of the current chunk within the container
     container.set_current_chunk(id_ref)
 
-  def get_obj(self, parent_container, chunk_dict):
-    return Chunk(parent_container, **chunk_dict)
+  def get_obj(self, json_chunk):
+    return Chunk(json_chunk.get('size'),
+                 json_chunk.get('obj_id'),
+                 json_chunk.get('tweet_ids', []),
+                 json_chunk.get('users', []),
+                 json_chunk.get('terms', []),
+                 json_chunk.get('user_mentions', []),
+                 json_chunk.get('hashtags', []),
+                 json_chunk.get('sorted_terms', []),
+                 json_chunk.get('sorted_user_mentions', []),
+                 json_chunk.get('sorted_hashtags', []))
+
+  def get_empty_obj(self):
+    # assume that the empty obj won't be in the DB, so no need for obj_id
+    return self.get_obj({'size': self.size})
 
   def load_obj_from_id(self, chunk_id):
     chunk = self.load_json_from_id(chunk_id)
@@ -215,10 +232,9 @@ class ChunkMgr(object):
 
 
 class Chunk(object):
-  def __init__(self, parent_container, size, obj_id,
+  def __init__(self, size, obj_id,
                tweet_ids, users, terms, user_mentions, hashtags,
                sorted_terms, sorted_user_mentions, sorted_hashtags):
-    self.parent_container = parent_container
     self.obj_id = obj_id
     self.size = size
     self.tweet_ids = set(tweet_ids)
@@ -247,7 +263,7 @@ class Chunk(object):
       self.sorted_hashtags = sorted_list_from_dict(self.hashtags)
     return self.sorted_terms, self.sorted_user_mentions, self.sorted_hashtags
 
-  def _serialize_sorted_lists(self, attrs_list):
+  def _serialize_sorted_lists(self):
     #the output of sorted_dicts has some sets that need to be transformed into something different
     self.sorted_terms = [(num, list(occ)) for num, occ in self.sorted_terms]
     self.sorted_user_mentions = [(num, list(occ)) for num, occ in self.sorted_user_mentions]
@@ -265,7 +281,7 @@ class Chunk(object):
     self.sorted_dicts()
     self._serialize_sorted_lists()
     keys = CHUNK_DATA
-    values = (self.parent_container, self.terms, self.sorted_terms,
+    values = (self.terms, self.sorted_terms,
               self.user_mentions, self.sorted_user_mentions,
               self.hashtags, self.sorted_hashtags, list(self.users), list(self.tweet_ids))
     return dict(zip(keys, values))

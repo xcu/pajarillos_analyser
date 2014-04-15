@@ -10,7 +10,7 @@ logger = logging.getLogger('utils')
 
 
 
-CHUNK_DATA = ('parent_container', 'terms', 'sorted_terms',
+CHUNK_DATA = ('terms', 'sorted_terms',
               'user_mentions', 'sorted_user_mentions', 'hashtags',
               'sorted_hashtags', 'users', 'tweet_ids')
 

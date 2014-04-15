@@ -1,5 +1,6 @@
 from streamers.streamer import Streamer
 
+
 class FileStreamer(Streamer):
   def __init__(self, file_name):
     super(FileStreamer, self).__init__()

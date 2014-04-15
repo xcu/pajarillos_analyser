@@ -1,5 +1,5 @@
 from pymongo import MongoClient
-from db.injector import ChunkInjector, TweetInjector
+from db.injector import ChunkContainerInjector, TweetInjector
 from db.injector_manager import InjectorManager
 from db.db_manager import ChunkDB
 from streamers.file_streamer import FileStreamer
@@ -23,7 +23,7 @@ if __name__ == '__main__':
   #streamer = DBStreamer(ObjDB(client, 'raw', 'tweets'))
   #chunks_are_equal(client['stats']['chunk_containers'], client['stats']['chunk_containers_fromdb'])
   streamer = HTTPStreamer(**dict(line.split() for line in open("/home/Cesar/pajarillos_analyser/token_data")))
-  tci = ChunkInjector(ChunkDB(client, 'stats'))
+  tci = ChunkContainerInjector(ChunkDB(client, 'stats'))
   im = InjectorManager(registered_injectors=(tci,))
   im.to_db(streamer)
   #for message in streamer:
