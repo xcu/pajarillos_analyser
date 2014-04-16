@@ -20,7 +20,7 @@ class TweetInjector(Injector):
   def __init__(self, dbmgr):
     self.dbmgr = dbmgr
 
-  def to_db(self, message, last_returned_val):
+  def to_db(self, message):
     self.dbmgr.update_doc({'id': int(message.get_id())}, message.message)
 
 
@@ -38,12 +38,10 @@ class ChunkContainerInjector(Injector):
     if not self.current_chunk_container:
       self.current_chunk_container = self.pick_container_from_msg_date(message)
     if not self.current_chunk_container.tweet_fits(message):
-      # passed the date that the container allows
       # store the current container and get a new one
       self._refresh_current_container(message)
     if self.current_chunk_container.current_chunk_isfull():
       self.container_mgr.save_in_db(self.current_chunk_container)
-#                                    self.current_chunk_container.current_chunk)
     self.current_chunk_container.update(message)
 
   def pick_container_from_msg_date(self, message):
