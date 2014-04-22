@@ -21,7 +21,10 @@ class TweetInjector(Injector):
     self.dbmgr = dbmgr
 
   def to_db(self, message):
-    self.dbmgr.update_doc({'id': int(message.get_id())}, message.message)
+    self.dbmgr.db.update_doc({'id': int(message.get_id())}, message.message)
+
+  def last_to_db(self):
+      pass
 
 
 class ChunkContainerInjector(Injector):

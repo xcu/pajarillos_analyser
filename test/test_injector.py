@@ -7,7 +7,7 @@ from db.db_manager import ObjDB
 from datetime import datetime, time
 import tweet_samples
 import ujson as json
-from mock import MagicMock, patch
+from mock import MagicMock
 
 
 class TestChunkContainerInjector(MongoTest):
@@ -94,7 +94,6 @@ class TestChunkContainerInjector(MongoTest):
     self.tci.container_mgr.size = 30
     self.assertEquals(self.tci._get_associated_container_key(tweet).time(), time(0, 30))
 
-
   # TODO: belongs to db manager
 #  def test_get_chunk_from_date(self):
 #    # first one that exists:
@@ -139,20 +138,22 @@ class TestTweetInjector(MongoTest):
     self.assertEquals(self.conn.database_names(), ['raw'])
     self.assertEquals(self.conn['raw'].collection_names(), [u'system.indexes', u'tweets'])
     self.assertEquals(self.conn['raw']['tweets'].find().count(), 20)
-#
-#
-#class Test2Injectors(MongoTest):
-#  def load_fixture(self):
-#    streamer = FileStreamer('mock_db_data')
-#    ti = TweetInjector(ObjDB(self.conn, 'raw', 'tweets', index='id'))
-#    tci = ChunkContainerInjector(ChunkDB(self.conn, 'stats'))
-#    im = InjectorManager(registered_injectors=(ti, tci))
-#    im.to_db(streamer)
-#
-#  def test_injector_worked(self):
-#    self.assertEquals(set(self.conn.database_names()), set(['raw', 'stats']))
-#    self.assertEquals(self.conn['stats'].collection_names(), [u'system.indexes', u'chunk_containers'])
-#    self.assertEquals(self.conn['stats']['chunk_containers'].find().count(), 3)
-#    self.assertEquals(self.conn['raw'].collection_names(), [u'system.indexes', u'tweets'])
-#    self.assertEquals(self.conn['raw']['tweets'].find().count(), 20)
+
+
+class Test2Injectors(MongoTest):
+  def load_fixture(self):
+    streamer = FileStreamer('mock_db_data')
+    ti = TweetInjector(ObjDB(self.conn, 'raw', 'id', 'tweets'))
+    tci = ChunkContainerInjector(self.conn, 'stats')
+    im = InjectorManager(registered_injectors=(ti, tci))
+    im.to_db(streamer)
+
+  def test_injector_worked(self):
+    self.assertEquals(set(self.conn.database_names()), set(['raw', 'stats']))
+    self.assertEquals([u'system.indexes', u'chunk_containers', u'chunks'],
+                      self.conn['stats'].collection_names())
+    self.assertEquals(3, self.conn['stats']['chunk_containers'].find().count())
+    self.assertEquals([u'system.indexes', u'tweets'],
+                      self.conn['raw'].collection_names())
+    self.assertEquals(20, self.conn['raw']['tweets'].find().count())
 
