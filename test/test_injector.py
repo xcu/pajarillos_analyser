@@ -108,16 +108,6 @@ class TestChunkContainerInjector(MongoTest):
 #    self.assertTrue(self.tci.chunk_exists(datetime.utcfromtimestamp(1376646540)))
 #    self.assertFalse(self.tci.chunk_exists(datetime.utcfromtimestamp(1076646540)))
 
-#  def test_save_chunk(self):
-#    c = self.tci.get_chunk_from_date(datetime.utcfromtimestamp(1376646540))
-#    self.assertEquals(len(c.chunks), 1)
-#    c.chunks = []
-#    self.tci.save_chunk(c)
-#    # pick it again and check it changed
-#    c = self.tci.get_chunk_from_date(datetime.utcfromtimestamp(1376646540))
-#    self.assertEquals(len(c.chunks), 0)
-
-
 # BELONGS TO DB MGR!!
 #  def test_reduce_range(self):
 #    ids = [c['start_date'] for c in self.conn['stats']['chunk_containers'].find()]

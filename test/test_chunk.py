@@ -1,38 +1,32 @@
-from streamers.file_streamer import FileStreamer
 from messages.tweet import Tweet
-from db_test_base import MongoTest
-from db.injector import ChunkContainerInjector, TweetInjector
-from db.injector_manager import InjectorManager
-from db.db_manager import ChunkDB
-from db.chunk import ChunkContainer, ChunkMgr, Chunk
+from db.chunk import ContainerMgr, ChunkContainer, ChunkMgr, Chunk
 from datetime import datetime
-import tweet_samples
+from mock import MagicMock
 import chunk_samples
-import ujson as json
 import unittest
-from itertools import izip
 
 
-class TestChunkContainerInjector(MongoTest):
+class TestContainerMgr(unittest.TestCase):
   def setUp(self):
-    self.tci = ChunkContainerInjector(ChunkDB(self.conn, 'stats'))
-    super(TestChunkContainerInjector, self).setUp()
-
-  def load_fixture(self):
-    streamer = FileStreamer('mock_db_data')
-    im = InjectorManager(registered_injectors=(self.tci,))
-    im.to_db(streamer)
-
-
-
-class TestChunkMgr(unittest.TestCase):
-  def setUp(self):
-    self.mgr = ChunkMgr(xxxxxxxxxxxxx)
+    self.mgr = ContainerMgr(MagicMock(), 'foobar')
+    self.mgr.chunkmgr = MagicMock()
+    self.mgr.dbmgr = MagicMock()
+    # TODO: srsly?
+    self.mgr.chunkmgr.dbmgr.save_chunk.return_value = 'chunkid'
     self.chunk = chunk_samples.chunk_sample.copy()
-    chunk_samples.chunk_sample['parent_container'] = datetime(2013, 8, 16, 9, 48)
-    chunk_samples.chunk_sample_small1['parent_container'] = datetime(2013, 8, 16, 9, 49)
-    chunk_samples.chunk_sample_small2['parent_container'] = datetime(2013, 8, 16, 9, 50)
     chunk_samples.chunk_container_sample["size"] = 10
+
+  def test_save_in_db(self):
+    container = MagicMock()
+    container.default.return_value = 'foocontainer'
+    container.current_chunk = False
+    self.mgr.save_in_db(container)
+    self.mgr.chunkmgr.save_in_db.assert_has_calls([])
+    self.mgr.dbmgr.update_obj.assert_called_once_with('foocontainer')
+    container.current_chunk = True
+    self.mgr.save_in_db(container)
+    self.mgr.chunkmgr.save_in_db.assert_called_once_with(True)
+    self.mgr.dbmgr.update_obj.assert_called_with('foocontainer')
 
   def test_get_empty_obj(self):
     c = self.mgr.get_empty_obj(3, datetime(2013, 10, 4, 9, 8))
@@ -51,16 +45,14 @@ class TestChunkMgr(unittest.TestCase):
     self.assertEquals(c.start_date, datetime(2013, 8, 16, 9, 48))
 
   def test_get_chunk(self):
-    parent = chunk_samples.chunk_sample['parent_container']
-    c = self.mgr.get_chunk(self.chunk.pop('parent_container'), self.chunk)
-    self.assertEquals(c.parent_container, parent)
+    c = self.mgr.get_chunk(self.chunk)
     self.assertEqual(c.terms, {"de" : 25, "y" : 14, "http" : 14, "co" : 14, "es" : 14, "por" : 6, "s" : 6, "o" : 6, "n" : 6})
 
   def test_get_top_occurrences(self):
     chunks = (chunk_samples.chunk_sample.copy(),
               chunk_samples.chunk_sample_small1.copy(),
               chunk_samples.chunk_sample_small2.copy())
-    chunks = [Chunk(chunk.pop('parent_container'), **chunk) for chunk in chunks]
+    chunks = [Chunk(**chunk) for chunk in chunks]
     r = self.mgr.get_top_occurrences(chunks, 4)
     self.assertEquals(r, {'user_mentions': [(4, 'Fulendstambulen'), (4, 'el_fary'), (2, 'Los40_Spain'), (2, 'williamlevybra')],
                           'hashtags': [(4, '10CosasQueOdio'), (3, 'nature'), (1, 'PutaVidaTete')],
@@ -71,25 +63,39 @@ class TestChunkContainer(unittest.TestCase):
     self.container = chunk_samples.chunk_container_sample.copy()
 
   def test_constructor_from_db(self):
-    cc = ChunkContainer(self.container.pop('size'), self.container.pop('start_date'), **self.container)
-    self.assertEquals(type(cc.current_chunk[0]), str)
-    self.assertEquals(cc.current_chunk[1], None)
+    cc = ChunkContainer(ContainerMgr(MagicMock(), 'foobar'),
+                        self.container.get('size'),
+                        self.container.get('start_date'),
+                        self.container.get('chunks'),
+                        self.container.get('current_chunk'))
+    self.assertEquals(type(cc.current_chunk), str)
 
   def test_constructor_fresh_obj(self):
     self.container.pop("current_chunk")
-    cc = ChunkContainer(self.container.pop('size'), self.container.pop('start_date'), **self.container)
-    self.assertEquals(type(cc.current_chunk[1]), Chunk)
-    self.assertEquals(cc.current_chunk[0], None)
-    
+    cc = ChunkContainer(ContainerMgr(MagicMock(), 'foobar'),
+                        self.container.get('size'),
+                        self.container.get('start_date'),
+                        self.container.get('chunks'),
+                        self.container.get('current_chunk'))
+    self.assertEquals(type(cc.current_chunk), Chunk)
+
   def test_constructor_bad_size(self):
     self.container = chunk_samples.chunk_container_sample_bad_size
-    self.assertRaises(AssertionError, ChunkContainer, self.container.pop('size'),
-                                                      self.container.pop('start_date'),
-                                                      **self.container)
+    self.assertRaises(AssertionError,
+                      ChunkContainer,
+                      ContainerMgr(MagicMock(), 'foobar'),
+                      self.container.get('size'),
+                      self.container.get('start_date'),
+                      self.container.get('chunks'),
+                      self.container.get('current_chunk'))
 
   def test_default(self):
     self.container = chunk_samples.chunk_container_with_chunks.copy()
-    cc = ChunkContainer(self.container.pop('size'), self.container.pop('start_date'), **self.container)
+    cc = ChunkContainer(ContainerMgr(MagicMock(), 'foobar'),
+                        self.container.get('size'),
+                        self.container.get('start_date'),
+                        self.container.get('chunks'),
+                        self.container.get('current_chunk'))
     self.assertEquals(cc.default(), {'chunks': ['1', '2'],
                                      'chunk_size': 100,
                                      'current_chunk': '52499970e138235994c416a3',
@@ -124,7 +130,7 @@ class TestChunkContainer(unittest.TestCase):
     self.container = chunk_samples.chunk_container_with_chunks.copy()
     cc = ChunkContainer(self.container.pop('size'), self.container.pop('start_date'), **self.container)
     for chunk in cc.chunks.iterkeys():
-        cc.chunks[chunk] = Chunk(cc.chunks[chunk].pop("parent_container"), **cc.chunks[chunk])
+        cc.chunks[chunk] = Chunk(cc.chunks[chunk].pop(**cc.chunks[chunk]))
     cc.current_chunk[1].update = lambda x: x
     cc.update(MockTweet("584700299958824960"))
     self.assertFalse(cc.changed_since_retrieval)

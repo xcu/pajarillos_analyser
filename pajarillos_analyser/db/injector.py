@@ -53,6 +53,8 @@ class ChunkContainerInjector(Injector):
     return self.container_mgr.load_obj_from_id(container_key)
 
   def _refresh_current_container(self, message):
+    # TODO: shouldn't the container be in charge of deciding whether to be
+    # stored in the db or not?
     if self.current_chunk_container.changed_since_retrieval:
       msg = "saving chunk in db because key {0} doesnt match tweet {1} with date {2}"
       logger.info(msg.format(self.current_chunk_container.start_date,

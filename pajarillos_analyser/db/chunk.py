@@ -43,15 +43,8 @@ class ContainerMgr(ObjMgr):
     return 1
 
   def save_in_db(self, container):
-    # chunks will be object ids already, no worries about them
-    # current chunk needs to get its sorted lists recalculated
-    # and update its entry in the db (fetching by its object id)
     if container.current_chunk:
-      json_chunk = container.current_chunk.default()
-      if container.current_chunk.obj_id:
-        self.chunkmgr.dbmgr.update_obj(json_chunk)
-      else:
-        container.current_chunk.obj_id = self.chunkmgr.dbmgr.save_chunk(json_chunk)
+      self.chunkmgr.save_in_db(container.current_chunk)
     self.dbmgr.update_obj(container.default())
 
   def get_obj(self, json_container):
@@ -88,10 +81,8 @@ class ContainerMgr(ObjMgr):
 
   def _set_container_fields_from_json(self, container):
     ''' after fetching a container from the db and initializing the container
-    object some of their fields need to be translated from DB representation
-    (like ids in the DB) to actual information to be used by the object '''
-    container.start_date = self.dbmgr.id_in_db_to_fieldval(container.start_date)
-    # container.current_chunk is only an ObjectId at this point
+    object the chunks will be only DB ids, they need to be transformed into
+    actual objects '''
     current_chunk_id = container.current_chunk
     if current_chunk_id:
       container.current_chunk = self.chunkmgr.load_obj_from_id(current_chunk_id)
@@ -106,10 +97,10 @@ class ChunkContainer(object):
   def __init__(self, mgr, size, start_date, chunks, current_chunk):
     # size of container in minutes
     assert not 60 % size, "60 must be divisible by ChunkContainer size"
+    # TODO: this should not be needed
     self.mgr = mgr
     self.size = size
     self.start_date = start_date
-    # list
     self.chunks = chunks
     self.current_chunk = current_chunk
     if not self.current_chunk:
@@ -153,7 +144,7 @@ class ChunkContainer(object):
 
   def set_current_chunk(self, id_in_db):
     # puts current_chunk in the chunks list and creates a new one
-    self.chunks.append(self.current_chunk)
+    self.chunks.append(id_in_db)
     self.current_chunk = self.get_new_current_chunk()
 
   def get_new_current_chunk(self):
@@ -172,11 +163,11 @@ class ChunkMgr(ObjMgr):
   def size(self):
     return 100
 
-  def save_in_db(self, container, chunk):
-    # chunk is the object, not the json representation
-    id_ref = self.dbmgr.save_chunk(chunk.default())
-    # link the DB id as the id of the current chunk within the container
-    container.set_current_chunk(id_ref)
+  def save_in_db(self, chunk):
+    if chunk.obj_id:
+      self.dbmgr.update_obj(chunk.default())
+    else:
+      chunk.obj_id = self.dbmgr.save_chunk(chunk.default())
 
   def get_obj(self, json_chunk):
     return Chunk(json_chunk.get('size'),
@@ -230,8 +221,8 @@ class ChunkMgr(ObjMgr):
 
 
 class Chunk(object):
-  def __init__(self, size, obj_id,
-               tweet_ids, users, terms, user_mentions, hashtags,
+  def __init__(self, size, obj_id, tweet_ids, users,
+               terms, user_mentions, hashtags,
                sorted_terms, sorted_user_mentions, sorted_hashtags):
     self.obj_id = obj_id
     self.size = size
@@ -283,6 +274,7 @@ class Chunk(object):
               self.user_mentions, self.sorted_user_mentions,
               self.hashtags, self.sorted_hashtags, list(self.users), list(self.tweet_ids))
     d = dict(zip(keys, values))
+    # TODO: improve this
     if self.obj_id:
         d['_id'] = self.obj_id
     return d

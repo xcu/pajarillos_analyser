@@ -45,6 +45,9 @@ class ObjDB(object):
   def _set_id_field_in_db(self, obj):
     obj[self.index_key] = self.fieldval_to_id_in_db(obj[self.index_key])
 
+  def _set_id_field_in_obj(self, obj):
+    obj[self.index_key] = self.id_in_db_to_fieldval(obj[self.index_key])
+
   def update_obj(self, obj):
     self._set_id_field_in_db(obj)
 
@@ -52,7 +55,9 @@ class ObjDB(object):
     res = self.db.get(self._get_index_and_id(db_id))
     if not res.count():
       return ''
-    return res.next()
+    json_obj = res.next()
+    self._set_id_field_in_obj(json_obj)
+    return json_obj
 
   def _get_index_and_id(self, obj_id):
     return {self.index_key: obj_id}
