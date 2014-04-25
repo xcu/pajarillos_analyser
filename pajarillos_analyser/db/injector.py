@@ -44,7 +44,7 @@ class ChunkContainerInjector(Injector):
       # store the current container and get a new one
       self._refresh_current_container(message)
     if self.current_chunk_container.current_chunk_isfull():
-      self.container_mgr.save_in_db(self.current_chunk_container)
+      self.container_mgr.refresh_current_chunk(self.current_chunk_container)
     self.current_chunk_container.update(message)
 
   def pick_container_from_msg_date(self, message):

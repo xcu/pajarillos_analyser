@@ -86,11 +86,19 @@ class ContainerMgr(ObjMgr):
     current_chunk_id = container.current_chunk
     if current_chunk_id:
       container.current_chunk = self.chunkmgr.load_obj_from_id(current_chunk_id)
-    container.chunks = [self.load_obj_from_id(chunk_id) for
+    container.chunks = [self.chunkmgr.load_obj_from_id(chunk_id) for
                                               chunk_id in container.chunks]
 
   def get_db_index_key(self):
     return 'start_date'
+
+  def refresh_current_chunk(self, container):
+    chunk = container.current_chunk
+    if chunk.changed_since_retrieval:
+      self.chunkmgr.save_in_db(chunk)
+      # TODO: encapsulate
+      container.chunks.append(chunk)
+    container.current_chunk = self.chunkmgr.get_empty_obj()
 
 
 class ChunkContainer(object):
@@ -141,11 +149,6 @@ class ChunkContainer(object):
 
   def current_chunk_isfull(self):
     return self.current_chunk.is_full()
-
-  def set_current_chunk(self, id_in_db):
-    # puts current_chunk in the chunks list and creates a new one
-    self.chunks.append(id_in_db)
-    self.current_chunk = self.get_new_current_chunk()
 
   def get_new_current_chunk(self):
     return self.mgr.chunkmgr.get_empty_obj()
