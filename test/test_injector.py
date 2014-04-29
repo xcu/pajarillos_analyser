@@ -59,6 +59,12 @@ class TestChunkContainerInjector(MongoTest):
     self.tci.to_db(tweet)
     self.assertEquals(self.conn['stats']['chunk_containers'].find().count(), 4)
 
+  def test_to_db_full_chunk(self):
+    tweet = Tweet(json.loads(tweet_samples.standard_ascii_tweet))
+    self.tci.current_chunk_container.current_chunk_isfull = MagicMock(return_value=True)
+    self.tci.to_db(tweet)
+    self.assertEquals([], self.tci.current_chunk_container.current_chunk)
+
   def test_pick_container_from_msg_date(self):
     # newly created container
     tweet = Tweet(json.loads(tweet_samples.standard_ascii_tweet))
