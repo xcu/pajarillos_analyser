@@ -14,6 +14,12 @@ CHUNK_DATA = ('terms', 'sorted_terms',
               'user_mentions', 'sorted_user_mentions', 'hashtags',
               'sorted_hashtags', 'users', 'tweet_ids')
 
+def container_size_is_valid(size):
+  if size < 60:
+    return not 60 % size
+  else:
+    return not size % 60
+
 def convert_date(date):
   '''
   converts datetime to unix timestamp

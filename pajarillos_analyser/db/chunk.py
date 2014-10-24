@@ -1,7 +1,10 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
 from db_manager import ContainerDB, ChunkDB
-from utils import get_top_occurrences, sorted_list_from_dict, CHUNK_DATA
+from utils import get_top_occurrences,\
+                  sorted_list_from_dict,\
+                  CHUNK_DATA,\
+                  container_size_is_valid
 import logging
 logging.basicConfig(filename='tweets.log',
                     level=logging.DEBUG,
@@ -38,10 +41,6 @@ class ContainerMgr(ObjMgr):
     self.dbmgr = ContainerDB(conn, db_name, self.get_db_index_key())
     self.chunkmgr = ChunkMgr(conn, db_name)
 
-  @property
-  def size(self):
-    return 1
-
   def save_in_db(self, container):
     if container.current_chunk:
       self.chunkmgr.save_in_db(container.current_chunk)
@@ -58,19 +57,20 @@ class ContainerMgr(ObjMgr):
     # sdate is a datetime object
     return self.get_obj({'size': size, 'start_date': sdate})
 
-  def load_obj_from_id(self, start):
+  def load_obj_from_id(self, start, container_size):
     '''
     loads the time chunk from the db if it exists or creates a new one
     @param start datetime object to match a key in the db
     '''
-    logger.info("trying to get chunk container from date {0}".format(start))
-    container = self.dbmgr.load_json_from_id(start)
+    logger.info("trying to get chunk container from date {0} with size {1}".\
+                                                 format(start, container_size))
+    container = self.dbmgr.load_json_from_id(start, container_size)
     if container:
       logger.info("Container found, retrieving from database")
       return self.load_obj_from_json(container)
     else:
       logger.info("Container not found, creating an empty one")
-      return self.get_empty_obj(self.size, start)
+      return self.get_empty_obj(container_size, start)
 
   def load_obj_from_json(self, container_dict):
     # returns a ChunkContainer object out from the provided dictionary
@@ -90,7 +90,7 @@ class ContainerMgr(ObjMgr):
                                               chunk_id in container.chunks]
 
   def get_db_index_key(self):
-    return 'start_date'
+    return ['start_date', 'size']
 
   def refresh_current_chunk(self, container):
     chunk = container.current_chunk
@@ -104,7 +104,8 @@ class ContainerMgr(ObjMgr):
 class ChunkContainer(object):
   def __init__(self, mgr, size, start_date, chunks, current_chunk):
     # size of container in minutes
-    assert not 60 % size, "60 must be divisible by ChunkContainer size"
+    if not container_size_is_valid(size):
+      raise Exception("60 must be divisible by ChunkContainer size")
     # TODO: this should not be needed
     self.mgr = mgr
     self.size = size
@@ -164,7 +165,7 @@ class ChunkMgr(ObjMgr):
 
   @property
   def size(self):
-    return 100
+    return 1000
 
   def save_in_db(self, chunk):
     if chunk.obj_id:
@@ -189,7 +190,7 @@ class ChunkMgr(ObjMgr):
     return self.get_obj({'size': self.size})
 
   def load_obj_from_id(self, chunk_id):
-    chunk = self.dbmgr.load_json_from_id(chunk_id)
+    chunk = self.dbmgr.load_json_from_id([chunk_id])
     if not chunk:
       raise Exception("No chunk found with id {0}".format(chunk_id))
     return self.load_obj_from_json(chunk)
@@ -220,7 +221,7 @@ class ChunkMgr(ObjMgr):
     return term.lower() in filter_list
 
   def get_db_index_key(self):
-    return '_id'
+    return ['_id']
 
 
 class Chunk(object):

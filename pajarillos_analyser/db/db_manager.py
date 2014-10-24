@@ -1,3 +1,4 @@
+import pymongo
 import itertools
 from utils import convert_date
 from datetime import datetime
@@ -38,29 +39,42 @@ class ObjDB(object):
   def __init__(self, conn, db_name, index_key, collection_name):
     self.db = DBHandler(conn[db_name][collection_name])
     self.index_key = index_key
-    self.db.collection.ensure_index(index_key, unique=True)
+    self.db.collection.ensure_index(self._build_indexes_direction(index_key),
+                                    unique=True)
 #    if flush:
 #      self.db.collection.drop()
 
+  def _build_indexes_direction(self, indexes):
+    # let's make it simple until we care about directions
+    return [(index, pymongo.ASCENDING) for index in indexes]
+
   def _set_id_field_in_db(self, obj):
-    obj[self.index_key] = self.fieldval_to_id_in_db(obj[self.index_key])
+    # TODO: is there a better way?
+    vals = [obj[key] for key in self.index_key]
+    for key, val in zip(self.index_key, self.fieldval_to_id_in_db(vals)):
+      obj[key] = val
 
   def _set_id_field_in_obj(self, obj):
-    obj[self.index_key] = self.id_in_db_to_fieldval(obj[self.index_key])
+    vals = [obj[key] for key in self.index_key]
+    for key, val in zip(self.index_key, self.id_in_db_to_fieldval(vals)):
+      obj[key] = val
 
   def update_obj(self, obj):
     self._set_id_field_in_db(obj)
 
-  def load_json_from_id(self, db_id):
-    res = self.db.get(self._get_index_and_id(db_id))
+  def load_json_from_id(self, id_values):
+    res = self.db.get(self._get_index_and_id(id_values))
     if not res.count():
       return ''
     json_obj = res.next()
     self._set_id_field_in_obj(json_obj)
     return json_obj
 
-  def _get_index_and_id(self, obj_id):
-    return {self.index_key: obj_id}
+  def _get_index_values(self, obj):
+    return [obj[index] for index in self.index_key]
+
+  def _get_index_and_id(self, id_values):
+    return dict(zip(self.index_key, id_values))
 
   def fieldval_to_id_in_db(self, objfield):
     return objfield
@@ -82,8 +96,8 @@ class ChunkDB(ObjDB):
   def update_obj(self, chunk):
     ''' it actually upserts '''
     super(ChunkDB, self).update_obj(chunk)
-    return self.db.update_doc(self._get_index_and_id(chunk[self.index_key]),
-                              chunk)
+    index_vals = self._get_index_values(chunk)
+    return self.db.update_doc(self._get_index_and_id(index_vals), chunk)
 
   def save_chunk(self, json_chunk):
     ''' inserts, but doesn't update '''
@@ -109,21 +123,24 @@ class ContainerDB(ObjDB):
   def update_obj(self, container):
     ''' it actually upserts '''
     super(ContainerDB, self).update_obj(container)
-    logger.info("updating db with key {0}. Chunk containing {1} chunks".\
-                format(container[self.index_key], len(container['chunks'])))
-    return self.db.update_doc(self._get_index_and_id(container[self.index_key]),
-                              container)
+    logger.info("updating db with date {0}. Chunk containing {1} chunks".\
+           format(self._get_index_values(container), len(container['chunks'])))
+    index_vals = self._get_index_values(container)
+    return self.db.update_doc(self._get_index_and_id(index_vals), container)
 
-  def load_json_from_id(self, sdate):
+  def load_json_from_id(self, sdate, size):
     # returns a dictionary with the container stored with the provided date
-    logger.info("db manager load_json_from_id: sdate is {0}".format(sdate))
-    container_id = self.fieldval_to_id_in_db(sdate)
+    logger.info("db manager load_json_from_id: sdate {0}, size {1}".\
+                                                           format(sdate, size))
+    container_id = self.fieldval_to_id_in_db((sdate, size))
     return super(ContainerDB, self).load_json_from_id(container_id)
 
-  def fieldval_to_id_in_db(self, date):
+  def fieldval_to_id_in_db(self, fields):
     ''' expects a datetime object, returns db id '''
-    return convert_date(date)
+    date, size = fields
+    return convert_date(date), size
 
-  def id_in_db_to_fieldval(self, key):
+  def id_in_db_to_fieldval(self, fields):
     ''' expects db id, returns datetime obj '''
-    return datetime.utcfromtimestamp(key)
+    date, size = fields
+    return datetime.utcfromtimestamp(date), size

@@ -7,7 +7,7 @@ from db.db_manager import ObjDB
 from datetime import datetime, time
 import tweet_samples
 import ujson as json
-from mock import MagicMock
+from mock import MagicMock, call
 
 
 class TestChunkContainerInjector(MongoTest):
@@ -25,24 +25,26 @@ class TestChunkContainerInjector(MongoTest):
     self.assertEquals(self.conn.database_names(), ['stats'])
     self.assertEquals([u'system.indexes', u'chunks', u'chunk_containers'],
                       self.conn['stats'].collection_names())
-    self.assertEquals(self.conn['stats']['chunk_containers'].find().count(), 3)
+    self.assertEquals(7, self.conn['stats']['chunk_containers'].find().count())
 
   def test_non_time_based_unprocessed(self):
     tweet = Tweet(json.loads(tweet_samples.standard_ascii_tweet))
     tweet.is_time_based = MagicMock(return_value=False)
-    self.assertTrue(self.tci.current_chunk_container is not None)
-    self.tci.current_chunk_container.tweet_fits = MagicMock()
+    self.assertTrue(bool(self.tci.chunk_containers))
+    for key in self.tci.container_sizes():
+      self.tci.chunk_containers[key].tweet_fits = MagicMock()
     self.tci.to_db(tweet)
     # nothing called
-    self.tci.current_chunk_container.tweet_fits.assert_has_calls([])
+    for key in self.tci.container_sizes():
+      self.tci.chunk_containers[key].tweet_fits.assert_has_calls([])
 
   def test_non_current_chunk(self):
     tweet = Tweet(json.loads(tweet_samples.standard_ascii_tweet))
     self.tci.current_chunk_container = None
     self.tci.to_db(tweet)
     self.assertEquals(datetime(2013, 8, 10, 18, 44),
-                      self.tci.current_chunk_container.start_date)
-    chunk = self.tci.current_chunk_container.current_chunk
+                      self.tci.chunk_containers[1].start_date)
+    chunk = self.tci.chunk_containers[1].current_chunk
     self.assertTrue(chunk.changed_since_retrieval)
     self.assertTrue([] != chunk.tweet_ids)
 
@@ -50,49 +52,50 @@ class TestChunkContainerInjector(MongoTest):
     # 3 containers: 9:48, 9:49 and 9:50
     # created at 18:44, current chunk pointing at 9:48
     tweet = Tweet(json.loads(tweet_samples.standard_ascii_tweet))
-    self.assertEquals(self.conn['stats']['chunk_containers'].find().count(), 3)
+    self.assertEquals(7, self.conn['stats']['chunk_containers'].find().count())
     self.tci.to_db(tweet)
     # no db update, current_chunk points now at 18:44 and has changed_since_retrieval
-    self.assertEquals(self.conn['stats']['chunk_containers'].find().count(), 3)
+    self.assertEquals(7, self.conn['stats']['chunk_containers'].find().count())
     # created at 18:40
     tweet = Tweet(json.loads(tweet_samples.non_ascii_tweet))
     self.tci.to_db(tweet)
-    self.assertEquals(self.conn['stats']['chunk_containers'].find().count(), 4)
+    self.assertEquals(8, self.conn['stats']['chunk_containers'].find().count())
 
   def test_pick_container_from_msg_date(self):
     # newly created container
     tweet = Tweet(json.loads(tweet_samples.standard_ascii_tweet))
-    c = self.tci.pick_container_from_msg_date(tweet)
+    c = self.tci.pick_container_from_msg_date(tweet, self.tci.chunk_containers[1].size)
     self.assertEquals(datetime(2013, 8, 10, 18, 44), c.start_date)
     # container from db, there is a container in the db with date 9:48
     tweet.message['created_at'] = "Fri Aug 16 09:48:55 +0000 2013"
-    c = self.tci.pick_container_from_msg_date(tweet)
+    c = self.tci.pick_container_from_msg_date(tweet, self.tci.chunk_containers[1].size)
     self.assertEquals(datetime(2013, 8, 16, 9, 48), c.start_date)
 
-  def test_refresh_current_container(self):
-    self.assertTrue(self.tci.current_chunk_container.changed_since_retrieval)
+  def test_refresh_container(self):
+    self.assertTrue(all(c.changed_since_retrieval for c in self.tci.chunk_containers.values()))
     tweet = Tweet(json.loads(tweet_samples.standard_ascii_tweet))
-    previous_container = self.tci.current_chunk_container
+    previous_containers = self.tci.chunk_containers.copy()
     self.tci.container_mgr.save_in_db = MagicMock()
-    self.tci._refresh_current_container(tweet)
-    self.assertNotEquals(self.tci.current_chunk_container, previous_container)
+    for container in self.tci.chunk_containers.itervalues():
+      self.tci._refresh_container(container, tweet)
+    for container_size in self.tci.chunk_containers.iterkeys():
+      self.assertNotEquals(self.tci.chunk_containers[container_size].current_chunk.terms,
+                           previous_containers[container_size].current_chunk.terms)
     # the previous container was stored in the db
-    self.tci.container_mgr.save_in_db.assert_called_once_with(previous_container)
+    calls = [call(c) for c in previous_containers.values()]
+    self.tci.container_mgr.save_in_db.assert_has_calls(calls, any_order=True)
 
   def test_get_associated_container_key(self):
     tweet = Tweet(json.loads(tweet_samples.hashtags_tweet))
     self.tci.container_mgr = MagicMock()
-    self.tci.container_mgr.size = 10
-    self.assertEquals(self.tci._get_associated_container_key(tweet).time(), time(8, 30))
+    self.assertEquals(self.tci._get_associated_container_key(tweet, 10).time(), time(8, 30))
     tweet.message['created_at'] = u'Wed Aug 07 08:44:39 +0000 2013'
-    self.assertEquals(self.tci._get_associated_container_key(tweet).time(), time(8, 40))
-    self.tci.container_mgr.size = 50
-    self.assertRaises(Exception, self.tci._get_associated_container_key, tweet)
-    self.tci.container_mgr.size = 120
-    self.assertRaises(Exception, self.tci._get_associated_container_key, tweet)
+    self.assertEquals(self.tci._get_associated_container_key(tweet, 10).time(), time(8, 40))
+    self.assertRaises(Exception, self.tci._get_associated_container_key, tweet, 50)
+    self.assertEquals(self.tci._get_associated_container_key(tweet, 240).time(), time(8, 40))
     tweet.message['created_at'] = u'Wed Aug 07 00:59:39 +0000 2013'
     self.tci.container_mgr.size = 30
-    self.assertEquals(self.tci._get_associated_container_key(tweet).time(), time(0, 30))
+    self.assertEquals(self.tci._get_associated_container_key(tweet, 30).time(), time(0, 30))
 
   # TODO: belongs to db manager
 #  def test_get_chunk_from_date(self):
@@ -119,7 +122,7 @@ class TestChunkContainerInjector(MongoTest):
 class TestTweetInjector(MongoTest):
   def load_fixture(self):
     streamer = FileStreamer('mock_db_data')
-    ti = TweetInjector(ObjDB(self.conn, 'raw', 'id', 'tweets'))
+    ti = TweetInjector(ObjDB(self.conn, 'raw', ['id'], 'tweets'))
     im = InjectorManager(registered_injectors=(ti,))
     im.to_db(streamer)
 
@@ -133,7 +136,7 @@ class TestTweetInjector(MongoTest):
 class Test2Injectors(MongoTest):
   def load_fixture(self):
     streamer = FileStreamer('mock_db_data')
-    ti = TweetInjector(ObjDB(self.conn, 'raw', 'id', 'tweets'))
+    ti = TweetInjector(ObjDB(self.conn, 'raw', ['id'], 'tweets'))
     tci = ChunkContainerInjector(self.conn, 'stats')
     im = InjectorManager(registered_injectors=(ti, tci))
     im.to_db(streamer)
@@ -142,7 +145,7 @@ class Test2Injectors(MongoTest):
     self.assertEquals(set(self.conn.database_names()), set(['raw', 'stats']))
     self.assertEquals([u'system.indexes', u'chunk_containers', u'chunks'],
                       self.conn['stats'].collection_names())
-    self.assertEquals(3, self.conn['stats']['chunk_containers'].find().count())
+    self.assertEquals(7, self.conn['stats']['chunk_containers'].find().count())
     self.assertEquals([u'system.indexes', u'tweets'],
                       self.conn['raw'].collection_names())
     self.assertEquals(20, self.conn['raw']['tweets'].find().count())
